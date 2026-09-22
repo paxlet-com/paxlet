@@ -20,3 +20,19 @@ Paxlet Node / Network ───┘
 ```
 
 Do not copy Taskand's whole domain model into Core. Instead, progressively adapt its reusable contracts to Paxlet URNs, manifests, grants and receipts.
+
+## Taskand -> Paxlet Adapter (`adapt.py`)
+
+Convert Taskand `proc.yaml` processes into standard `paxlet.json` manifests:
+
+```bash
+# Convert a single process
+python integrations/taskand/adapt.py path/to/proc.yaml
+
+# Convert all generated processes in Taskand
+python integrations/taskand/adapt.py ../taskand/generated/
+
+# Dry run / validation only
+python integrations/taskand/adapt.py ../taskand/generated/ --dry-run
+```
+

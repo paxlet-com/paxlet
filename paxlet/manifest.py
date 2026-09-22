@@ -11,6 +11,21 @@ from .errors import ManifestError
 MANIFEST_NAME = "paxlet.json"
 CORE_VERSION = "0.1"
 
+IGNORED_DIR_NAMES = {
+    ".paxlet",
+    ".git",
+    ".venv",
+    "__pycache__",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".mypy_cache",
+    "node_modules",
+    "dist",
+    "build",
+}
+IGNORED_FILE_PATTERNS = {".DS_Store", "Thumbs.db"}
+IGNORED_EXTENSIONS = {".pyc", ".pyo", ".paxlet.zip"}
+
 
 @dataclass(frozen=True)
 class ValidationResult:
@@ -43,11 +58,20 @@ def load_manifest(path: str | Path) -> tuple[Path, dict[str, Any]]:
     return target, data
 
 
-def safe_path(root: Path, relative: str) -> Path:
+def safe_path(root: Path, relative: str, allow_symlinks: bool = False) -> Path:
     if not isinstance(relative, str) or not relative or relative.startswith(("/", "\\")):
         raise ManifestError(f"path must be a non-empty relative path: {relative!r}")
     resolved_root = root.resolve()
-    resolved = (resolved_root / relative).resolve()
+    target = resolved_root / relative
+    if not allow_symlinks:
+        check = target
+        while check != resolved_root and check != check.parent:
+            if check.is_symlink():
+                raise ManifestError(f"symlinks are not permitted in Paxlet packages: {relative}")
+            check = check.parent
+    resolved = target.resolve()
+    if not allow_symlinks and resolved.is_symlink():
+        raise ManifestError(f"symlinks are not permitted in Paxlet packages: {relative}")
     try:
         resolved.relative_to(resolved_root)
     except ValueError as exc:
@@ -72,6 +96,11 @@ def _validate_schema_fragment(fragment: Any, label: str, errors: list[str]) -> N
 def validate_manifest(package_dir: Path, data: dict[str, Any], check_files: bool = True) -> ValidationResult:
     errors: list[str] = []
     warnings: list[str] = []
+
+    if check_files and package_dir.exists() and package_dir.is_dir():
+        for child in package_dir.rglob("*"):
+            if child.is_symlink():
+                errors.append(f"symlinks are not permitted in Paxlet packages: {child.relative_to(package_dir).as_posix()}")
 
     if data.get("paxlet") != CORE_VERSION:
         errors.append(f"paxlet must be {CORE_VERSION!r}")
@@ -119,8 +148,8 @@ def validate_manifest(package_dir: Path, data: dict[str, Any], check_files: bool
             errors.append(f"{label}.runtime.type must be 'python' or 'command'")
         if runtime_type == "python":
             entry = runtime.get("entry")
-            if not isinstance(entry, str):
-                errors.append(f"{label}.runtime.entry must be a relative path")
+            if not isinstance(entry, str) or not entry.strip():
+                errors.append(f"{label}.runtime.entry must be a non-empty relative path")
             else:
                 try:
                     path = safe_path(package_dir, entry)
@@ -130,8 +159,18 @@ def validate_manifest(package_dir: Path, data: dict[str, Any], check_files: bool
                     errors.append(str(exc))
         if runtime_type == "command":
             argv = runtime.get("argv")
-            if not isinstance(argv, list) or not argv or not all(isinstance(v, str) for v in argv):
+            if not isinstance(argv, list) or not argv or not all(isinstance(v, str) and v.strip() for v in argv):
                 errors.append(f"{label}.runtime.argv must be a non-empty string array")
+            elif check_files:
+                for arg in argv:
+                    clean_arg = arg[2:] if arg.startswith("./") else arg
+                    if arg.startswith("./") or (not arg.startswith("/") and (package_dir / clean_arg).is_file()):
+                        try:
+                            arg_path = safe_path(package_dir, clean_arg)
+                            if not arg_path.is_file():
+                                errors.append(f"{label}.runtime.argv references missing file: {arg}")
+                        except ManifestError as exc:
+                            errors.append(str(exc))
         _validate_schema_fragment(action.get("input"), f"{label}.input", errors)
         _validate_schema_fragment(action.get("output"), f"{label}.output", errors)
 
@@ -178,19 +217,56 @@ def validate_manifest(package_dir: Path, data: dict[str, Any], check_files: bool
 
 def collect_package_files(package_dir: Path, data: dict[str, Any]) -> list[Path]:
     root = package_dir.resolve()
-    files: set[Path] = {root / MANIFEST_NAME}
+    files: set[Path] = set()
+
+    manifest_target = root / MANIFEST_NAME
+    if manifest_target.is_file():
+        if manifest_target.is_symlink():
+            raise ManifestError(f"symlinks are not permitted in Paxlet packages: {MANIFEST_NAME}")
+        files.add(manifest_target)
+
     for action in data.get("actions", {}).values():
-        runtime = action.get("runtime", {}) if isinstance(action, dict) else {}
+        if not isinstance(action, dict):
+            continue
+        runtime = action.get("runtime", {})
+        if not isinstance(runtime, dict):
+            continue
         if runtime.get("type") == "python" and isinstance(runtime.get("entry"), str):
-            files.add(safe_path(root, runtime["entry"]))
+            p = safe_path(root, runtime["entry"])
+            if p.is_file():
+                files.add(p)
+        elif runtime.get("type") == "command" and isinstance(runtime.get("argv"), list):
+            for arg in runtime["argv"]:
+                if isinstance(arg, str):
+                    clean_arg = arg[2:] if arg.startswith("./") else arg
+                    candidate = root / clean_arg
+                    if candidate.is_file():
+                        files.add(safe_path(root, clean_arg))
+
     for relative in data.get("resources", []):
         path = safe_path(root, relative)
         if path.is_dir():
             for child in path.rglob("*"):
+                if child.is_symlink():
+                    raise ManifestError(f"symlinks are not permitted in Paxlet packages: {child.relative_to(root).as_posix()}")
                 if child.is_file():
                     files.add(child.resolve())
-        else:
+        elif path.is_file():
             files.add(path)
+
+    # Complete package closure: all non-ignored local package implementation files
+    if root.is_dir():
+        for item in root.rglob("*"):
+            if item.is_symlink():
+                raise ManifestError(f"symlinks are not permitted in Paxlet packages: {item.relative_to(root).as_posix()}")
+            rel_parts = item.relative_to(root).parts
+            if any(part in IGNORED_DIR_NAMES for part in rel_parts):
+                continue
+            if item.is_file():
+                if item.name in IGNORED_FILE_PATTERNS or item.suffix in IGNORED_EXTENSIONS:
+                    continue
+                files.add(item.resolve())
+
     return sorted(files, key=lambda p: p.relative_to(root).as_posix())
 
 

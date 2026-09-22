@@ -18,9 +18,22 @@ def value_digest(value: Any) -> str:
     return "sha256:" + hashlib.sha256(canonical_json(value)).hexdigest()
 
 
-def new_receipt(*, manifest: dict[str, Any], package_digest: str, action: str, payload: Any, started: str, finished: str, exit_code: int, output: Any, secret_names: list[str]) -> dict[str, Any]:
+def new_receipt(
+    *,
+    manifest: dict[str, Any],
+    package_digest: str,
+    action: str,
+    payload: Any,
+    started: str,
+    finished: str,
+    exit_code: int,
+    output: Any,
+    secret_names: list[str],
+    include_raw_output: bool = False,
+    artifact_refs: list[str] | None = None,
+) -> dict[str, Any]:
     identity = manifest["identity"]
-    return {
+    receipt: dict[str, Any] = {
         "receipt": "paxlet/0.1",
         "identity": {"urn": identity["urn"], "version": identity["version"]},
         "package_digest": package_digest,
@@ -33,8 +46,13 @@ def new_receipt(*, manifest: dict[str, Any], package_digest: str, action: str, p
         "finished_at": finished,
         "exit_code": exit_code,
         "granted_secret_names": sorted(secret_names),
-        "output": output,
+        "artifact_refs": sorted(artifact_refs or []),
     }
+    # Secret values MUST NOT appear in receipts.
+    # Raw output is omitted by default; if explicitly opted-in and no secrets were granted, it may be recorded.
+    if include_raw_output and not secret_names:
+        receipt["output"] = output
+    return receipt
 
 
 def write_receipt(package_dir: Path, receipt: dict[str, Any]) -> Path:
