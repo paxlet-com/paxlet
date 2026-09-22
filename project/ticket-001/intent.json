@@ -1,0 +1,101 @@
+{
+  "schema": "new-project.intent/v3",
+  "ticket": "ticket-001",
+  "summary": "Adopt wellmanifest/wellman baseline standards into paxlet",
+  "workstream": "governance",
+  "classification": {
+    "kind": "SERVICE",
+    "priority": "P2",
+    "origin": "health"
+  },
+  "allowedPaths": [
+    ".aider.conf.yml",
+    ".cursor/rules/**",
+    ".gitattributes",
+    ".githooks/**",
+    ".github/copilot-instructions.md",
+    ".github/workflows/new-project-branch-hygiene.yml",
+    ".github/workflows/new-project-governance.yml",
+    ".gitignore",
+    ".governance/**",
+    ".subactor/**",
+    "AGENTS.md",
+    "CLAUDE.md",
+    "GEMINI.md",
+    "README.md",
+    "TODO.md",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "project.sh",
+    "project.bat",
+    "project/**",
+    "scripts/install-agent-hosts.sh",
+    "scripts/runtime.sh",
+    "wellmanifest_governance.py",
+    "worktree-guard.yaml",
+    "pyproject.toml"
+  ],
+  "forbiddenPaths": [],
+  "stacks": ["python"],
+  "dependsOn": [],
+  "conflictsWith": [],
+  "integrationTicket": null,
+  "delivery": {
+    "acceptedBaseSha": "0c199cace18ad4e4c7c834497cf7118e5fd55437",
+    "targetBranch": "main",
+    "outcome": "Adoption of wellmanifest standards with worktrees and git lifecycle",
+    "nonGoals": [
+      "Modifying core paxlet runtime actions or packaging algorithms"
+    ],
+    "complexity": "L",
+    "estimatedMinutes": 30,
+    "budgets": {
+      "maxImplementationFiles": 15,
+      "maxAffectedComponents": 1,
+      "maxPublicInterfaceChanges": 0,
+      "maxRuntimeDependencies": 0
+    },
+    "architecture": {
+      "status": "accepted",
+      "decision": "Adopt wellmanifest/new-project governance baseline",
+      "components": [
+        {
+          "name": "governance",
+          "paths": [
+            ".gitattributes",
+            ".gitignore",
+            ".governance/**",
+            "CHANGELOG.md",
+            "README.md",
+            "project.bat",
+            "project.sh",
+            "pyproject.toml",
+            "CONTRIBUTING.md"
+          ]
+        }
+      ],
+      "responsibilityChanges": false,
+      "interfaceChanges": [],
+      "dataChanges": [],
+      "ui": {
+        "impact": "none",
+        "states": [],
+        "evidence": []
+      },
+      "rollback": "Revert to accepted base sha 0c199cace18ad4e4c7c834497cf7118e5fd55437."
+    },
+    "runtimeDependencies": [],
+    "validation": [
+      {
+        "criterion": "AC-01",
+        "commands": ["wellman check --root ."],
+        "evidence": "Wellman check passes cleanly."
+      }
+    ],
+    "standardAdoption": {
+      "sourceRepository": "wellmanifest/new-project",
+      "fromRevision": null,
+      "toRevision": "56223848ea416d59e53123cdcab6e9155a11fe2b"
+    }
+  }
+}
