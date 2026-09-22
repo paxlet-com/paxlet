@@ -1,0 +1,15 @@
+{
+  "paxlet": "0.1",
+  "identity": {"urn": "urn:paxlet:example:text-wordcount", "name": "text-wordcount", "version": "1.0.0"},
+  "actions": {
+    "count": {
+      "description": "Count whitespace-delimited words.",
+      "runtime": {"type": "python", "entry": "count.py"},
+      "input": {"type": "object", "required": ["text"], "properties": {"text": {"type": "string"}}},
+      "output": {"type": "object", "required": ["words"], "properties": {"words": {"type": "integer"}}}
+    }
+  },
+  "resources": [],
+  "requires": [],
+  "permissions": {"filesystem": {"read": [], "write": []}, "network": [], "secrets": []}
+}

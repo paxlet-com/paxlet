@@ -1,0 +1,17 @@
+{
+  "paxlet": "0.1",
+  "identity": {"urn": "urn:paxlet:example:hello", "name": "hello", "version": "1.0.0"},
+  "bindings": ["paxlet://example/hello"],
+  "actions": {
+    "hello": {
+      "description": "Return a greeting.",
+      "runtime": {"type": "python", "entry": "hello.py"},
+      "input": {"type": "object", "required": ["name"], "properties": {"name": {"type": "string"}}},
+      "output": {"type": "object", "required": ["message"], "properties": {"message": {"type": "string"}}}
+    }
+  },
+  "resources": [],
+  "requires": [],
+  "permissions": {"filesystem": {"read": [], "write": []}, "network": [], "secrets": []},
+  "provenance": {"source": "paxlet-com/paxlet examples"}
+}

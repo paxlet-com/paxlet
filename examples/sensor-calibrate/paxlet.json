@@ -1,0 +1,24 @@
+{
+  "paxlet": "0.1",
+  "identity": {"urn": "urn:paxlet:science:sensor-calibrate", "name": "sensor-calibrate", "version": "1.0.0"},
+  "actions": {
+    "calibrate": {
+      "description": "Apply gain and offset to sensor observations.",
+      "runtime": {"type": "python", "entry": "calibrate.py"},
+      "input": {
+        "type": "object",
+        "required": ["values"],
+        "properties": {
+          "values": {"type": "array", "items": {"type": "number"}},
+          "gain": {"type": "number"},
+          "offset": {"type": "number"}
+        }
+      },
+      "output": {"type": "object", "required": ["values"], "properties": {"values": {"type": "array", "items": {"type": "number"}}}}
+    }
+  },
+  "resources": [],
+  "requires": [],
+  "permissions": {"filesystem": {"read": [], "write": []}, "network": [], "secrets": []},
+  "metadata": {"audience": "research"}
+}

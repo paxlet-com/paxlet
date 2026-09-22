@@ -1,0 +1,15 @@
+{
+  "paxlet": "0.1",
+  "identity": {"urn": "urn:paxlet:science:statistics-mean", "name": "statistics-mean", "version": "1.0.0"},
+  "actions": {
+    "mean": {
+      "description": "Compute the arithmetic mean of numeric observations.",
+      "runtime": {"type": "python", "entry": "mean.py"},
+      "input": {"type": "object", "required": ["values"], "properties": {"values": {"type": "array", "items": {"type": "number"}}}},
+      "output": {"type": "object", "required": ["count", "mean"], "properties": {"count": {"type": "integer"}, "mean": {"type": "number"}}}
+    }
+  },
+  "resources": [],
+  "requires": [],
+  "permissions": {"filesystem": {"read": [], "write": []}, "network": [], "secrets": []}
+}

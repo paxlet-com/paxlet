@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://paxlet.com/schema/paxlet-0.1.json",
+  "title": "Paxlet Core 0.1 Manifest",
+  "type": "object",
+  "required": ["paxlet", "identity"],
+  "properties": {
+    "paxlet": {"const": "0.1"},
+    "identity": {
+      "type": "object",
+      "required": ["urn", "name", "version"],
+      "properties": {
+        "urn": {"type": "string", "pattern": "^urn:paxlet:"},
+        "name": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": true
+    },
+    "bindings": {"type": "array", "items": {"type": "string"}},
+    "actions": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["runtime"],
+        "properties": {
+          "description": {"type": "string"},
+          "runtime": {
+            "type": "object",
+            "required": ["type"],
+            "properties": {
+              "type": {"enum": ["python", "command"]},
+              "entry": {"type": "string"},
+              "argv": {"type": "array", "items": {"type": "string"}, "minItems": 1}
+            }
+          },
+          "input": {"type": "object"},
+          "output": {"type": "object"}
+        }
+      }
+    },
+    "resources": {"type": "array", "items": {"type": "string"}},
+    "requires": {"type": "array", "items": {"type": "string", "pattern": "^urn:paxlet:"}},
+    "permissions": {
+      "type": "object",
+      "properties": {
+        "filesystem": {
+          "type": "object",
+          "properties": {
+            "read": {"type": "array", "items": {"type": "string"}},
+            "write": {"type": "array", "items": {"type": "string"}}
+          }
+        },
+        "network": {"type": "array", "items": {"type": "string"}},
+        "secrets": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "provenance": {"type": "object"},
+    "metadata": {"type": "object"}
+  },
+  "additionalProperties": true,
+  "anyOf": [
+    {"required": ["actions"]},
+    {"required": ["resources"]}
+  ]
+}

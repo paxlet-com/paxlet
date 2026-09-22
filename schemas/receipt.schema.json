@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://paxlet.com/schema/receipt-0.1.json",
+  "title": "Paxlet Execution Receipt 0.1",
+  "type": "object",
+  "required": ["receipt", "identity", "package_digest", "action", "input_digest", "runtime", "node", "started_at", "finished_at", "exit_code"],
+  "properties": {
+    "receipt": {"const": "paxlet/0.1"},
+    "identity": {
+      "type": "object",
+      "required": ["urn", "version"],
+      "properties": {
+        "urn": {"type": "string", "pattern": "^urn:paxlet:"},
+        "version": {"type": "string"}
+      }
+    },
+    "package_digest": {"type": "string", "pattern": "^sha256:"},
+    "action": {"type": "string"},
+    "input_digest": {"type": "string", "pattern": "^sha256:"},
+    "output_digest": {"type": ["string", "null"]},
+    "runtime": {"type": "string"},
+    "node": {"type": "string"},
+    "started_at": {"type": "string"},
+    "finished_at": {"type": "string"},
+    "exit_code": {"type": "integer"},
+    "granted_secret_names": {"type": "array", "items": {"type": "string"}},
+    "output": {}
+  }
+}

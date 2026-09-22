@@ -1,0 +1,8 @@
+{
+  "paxlet": "0.1",
+  "identity": {"urn": "urn:paxlet:test:escape", "name": "escape", "version": "1"},
+  "actions": {"bad": {"runtime": {"type": "python", "entry": "../../outside.py"}}},
+  "resources": [],
+  "requires": [],
+  "permissions": {"filesystem": {"read": [], "write": []}, "network": [], "secrets": []}
+}

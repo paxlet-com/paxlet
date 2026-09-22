@@ -1,0 +1,95 @@
+# goal.yaml - Goal configuration file
+# Documentation: https://github.com/wronai/goal#configuration
+
+version: '1.0'
+project:
+  name: paxlet
+  type:
+  - python
+  description: Small, addressable packages of resources and actions for connected systems.
+versioning:
+  strategy: semver
+  files:
+  - VERSION
+  - pyproject.toml:version
+  - paxlet/__init__.py:__version__
+  bump_rules:
+    patch: 10
+    minor: 50
+    major: 200
+git:
+  commit:
+    strategy: conventional
+    scope: paxlet
+    abstraction_level: auto
+    templates:
+      feat:
+        high: 'feat({domain}): {benefit}'
+        medium: 'feat({domain}): add {entities}'
+        low: 'feat({domain}): add {file_count} files (+{added}/-{deleted})'
+      fix:
+        high: 'fix({domain}): {benefit}'
+        medium: 'fix({domain}): resolve {entities}'
+        low: 'fix({domain}): update {file_count} files (+{added}/-{deleted})'
+      docs:
+        high: 'docs({domain}): {benefit}'
+        medium: 'docs({domain}): document {entities}'
+        low: 'docs({domain}): update {file_count} files'
+      test:
+        high: 'test({domain}): {benefit}'
+        medium: 'test({domain}): add tests for {entities}'
+        low: 'test({domain}): update {file_count} files'
+  changelog:
+    enabled: true
+    template: keep-a-changelog
+    output: CHANGELOG.md
+    sections:
+    - Added
+    - Changed
+    - Fixed
+    - Deprecated
+    - Removed
+    - Security
+  tag:
+    enabled: true
+    prefix: v
+    format: '{prefix}{version}'
+publishing:
+  enabled: true
+  registries:
+  - pypi
+  dry_run: false
+  fallback:
+    github_release:
+      enabled: true
+      owner: paxlet-com
+      repo: paxlet
+      token_env: GITHUB_TOKEN
+      skip_pypi_retries_on_block: true
+      asset_glob: dist/*
+strategies:
+  python:
+    test: python -m unittest discover -s tests -v && python conformance/run.py && make verify-examples
+    build: python -m build
+    publish: twine upload dist/paxlet-{version}*
+    publish_enabled: true
+    dependencies:
+      file: pyproject.toml
+registries:
+  pypi:
+    url: https://pypi.org/simple/
+    token_env: PYPI_TOKEN
+advanced:
+  auto_update_config: true
+  file_validation:
+    max_file_size_mb: 10
+    block_large_files: true
+    detect_api_tokens: true
+    auto_manage_gitignore: true
+    auto_add_dot_folders: true
+    auto_handle_large_files: true
+    known_dot_folders:
+    - .idea
+    - .vscode
+    - .venv
+    - .env

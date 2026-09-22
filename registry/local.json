@@ -1,0 +1,10 @@
+{
+  "registry": "paxlet/0.1",
+  "entries": {
+    "urn:paxlet:example:hello": [{"version": "1.0.0", "uri": "file:../examples/hello"}],
+    "urn:paxlet:science:statistics-mean": [{"version": "1.0.0", "uri": "file:../examples/statistics-mean"}],
+    "urn:paxlet:science:fasta-gc": [{"version": "1.0.0", "uri": "file:../examples/science-fasta-gc"}],
+    "urn:paxlet:example:text-wordcount": [{"version": "1.0.0", "uri": "file:../examples/text-wordcount"}],
+    "urn:paxlet:science:sensor-calibrate": [{"version": "1.0.0", "uri": "file:../examples/sensor-calibrate"}]
+  }
+}

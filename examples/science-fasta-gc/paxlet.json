@@ -1,0 +1,16 @@
+{
+  "paxlet": "0.1",
+  "identity": {"urn": "urn:paxlet:science:fasta-gc", "name": "science-fasta-gc", "version": "1.0.0"},
+  "actions": {
+    "analyze": {
+      "description": "Compute GC fraction for a sequence or the bundled FASTA sample.",
+      "runtime": {"type": "python", "entry": "analyze.py"},
+      "input": {"type": "object", "properties": {"sequence": {"type": "string"}}},
+      "output": {"type": "object", "required": ["length", "gc_fraction"], "properties": {"length": {"type": "integer"}, "gc_fraction": {"type": "number"}}}
+    }
+  },
+  "resources": ["data/sample.fasta"],
+  "requires": [],
+  "permissions": {"filesystem": {"read": ["data/sample.fasta"], "write": []}, "network": [], "secrets": []},
+  "metadata": {"audience": "research"}
+}
