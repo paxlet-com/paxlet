@@ -5,6 +5,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlparse
 
 from .errors import ResolutionError
+from .manifest import package_digest
 
 DEFAULT_REGISTRY = Path(__file__).resolve().parents[1] / "registry" / "local.json"
 
@@ -22,7 +23,11 @@ def load_registry(path: str | Path | None = None) -> tuple[Path, dict]:
     return target, data
 
 
-def resolve(urn: str, registry_path: str | Path | None = None) -> list[dict]:
+def resolve(
+    urn: str,
+    registry_path: str | Path | None = None,
+    version: str | None = None,
+) -> list[dict]:
     target, data = load_registry(registry_path)
     entries = data["entries"].get(urn, [])
     if not entries:
@@ -30,6 +35,8 @@ def resolve(urn: str, registry_path: str | Path | None = None) -> list[dict]:
     out: list[dict] = []
     for item in entries:
         if not isinstance(item, dict) or not isinstance(item.get("uri"), str):
+            continue
+        if version and item.get("version") != version:
             continue
         uri = item["uri"]
         parsed = urlparse(uri)
@@ -41,7 +48,8 @@ def resolve(urn: str, registry_path: str | Path | None = None) -> list[dict]:
             uri = p.as_uri()
         out.append({**item, "uri": uri})
     if not out:
-        raise ResolutionError(f"URN has no usable locations: {urn}")
+        msg = f"URN {urn} has no usable locations" + (f" matching version {version}" if version else "")
+        raise ResolutionError(msg)
     return out
 
 
@@ -54,11 +62,27 @@ def uri_to_path(uri: str) -> Path:
     return Path(unquote(parsed.path)).resolve()
 
 
-def resolve_to_path(urn: str, registry_path: str | Path | None = None) -> Path:
-    locations = resolve(urn, registry_path)
+def resolve_to_path(
+    urn: str,
+    registry_path: str | Path | None = None,
+    *,
+    version: str | None = None,
+    verify_digest: bool = True,
+) -> Path:
+    locations = resolve(urn, registry_path, version=version)
     for item in locations:
         try:
-            return uri_to_path(item["uri"])
+            path = uri_to_path(item["uri"])
+            if verify_digest and item.get("digest"):
+                expected = item["digest"]
+                actual = package_digest(path)
+                if actual != expected:
+                    raise ResolutionError(
+                        f"package digest mismatch for {urn} at {path}: expected {expected}, got {actual}"
+                    )
+            return path
         except ResolutionError:
+            raise
+        except Exception:
             continue
     raise ResolutionError(f"no executable file: location for {urn}")

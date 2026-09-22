@@ -1,3 +1,3 @@
 """Paxlet Core 0.1 reference runtime."""
 
-__version__ = "0.1.2"
+__version__ = "0.1.3"

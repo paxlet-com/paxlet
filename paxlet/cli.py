@@ -15,6 +15,10 @@ from .runtime import run_action
 
 def _target(value: str, registry: str | None) -> Path:
     if value.startswith("urn:paxlet:"):
+        from .store import get_package
+        stored = get_package(value)
+        if stored and stored.is_dir():
+            return stored
         return resolve_to_path(value, registry)
     return Path(value)
 
@@ -131,7 +135,7 @@ def command_run(args) -> int:
 
 
 def command_resolve(args) -> int:
-    locations = resolve(args.urn, args.registry)
+    locations = resolve(args.urn, args.registry, version=getattr(args, "urn_version", None))
     _json({"urn": args.urn, "locations": locations})
     return 0
 
@@ -140,6 +144,42 @@ def command_pack(args) -> int:
     output = args.output or (Path(args.target).resolve().name + ".paxlet.zip")
     path = pack_paxlet(_target(args.target, args.registry), output)
     print(path)
+    return 0
+
+
+def command_store_put(args) -> int:
+    from .store import put_package
+    target = _target(args.target, args.registry)
+    digest, archive, unpacked = put_package(target)
+    if args.json:
+        _json({"digest": digest, "archive": str(archive), "path": str(unpacked)})
+    else:
+        print(f"✓ stored {digest}")
+        print(f"  archive:  {archive}")
+        print(f"  unpacked: {unpacked}")
+    return 0
+
+
+def command_store_get(args) -> int:
+    from .store import get_package
+    p = get_package(args.target)
+    if not p:
+        raise PaxletError(f"package not found in store: {args.target}")
+    print(str(p))
+    return 0
+
+
+def command_store_list(args) -> int:
+    from .store import list_packages
+    records = list_packages()
+    if args.json:
+        _json(records)
+    else:
+        if not records:
+            print("Store is empty.")
+            return 0
+        for r in records:
+            print(f"{r.get('urn')}@{r.get('version')} -> {r.get('digest')} ({r.get('path')})")
     return 0
 
 
@@ -179,6 +219,7 @@ def parser() -> argparse.ArgumentParser:
     resolve_cmd = sub.add_parser("resolve", help="resolve a stable Paxlet URN to locations")
     resolve_cmd.add_argument("urn")
     resolve_cmd.add_argument("--registry")
+    resolve_cmd.add_argument("--version", dest="urn_version", help="filter by version")
     resolve_cmd.set_defaults(func=command_resolve)
 
     pack_cmd = sub.add_parser("pack", help="create a portable .paxlet.zip archive")
@@ -186,6 +227,24 @@ def parser() -> argparse.ArgumentParser:
     pack_cmd.add_argument("-o", "--output")
     pack_cmd.add_argument("--registry")
     pack_cmd.set_defaults(func=command_pack)
+
+    store_parser = sub.add_parser("store", help="manage content-addressed local store")
+    store_sub = store_parser.add_subparsers(dest="store_action", required=True)
+
+    store_put = store_sub.add_parser("put", help="put package into content-addressed store")
+    store_put.add_argument("target")
+    store_put.add_argument("--registry")
+    store_put.add_argument("--json", action="store_true")
+    store_put.set_defaults(func=command_store_put)
+
+    store_get = store_sub.add_parser("get", help="get unpacked package path from store by digest or URN")
+    store_get.add_argument("target")
+    store_get.set_defaults(func=command_store_get)
+
+    store_list = store_sub.add_parser("list", help="list all stored packages")
+    store_list.add_argument("--json", action="store_true")
+    store_list.set_defaults(func=command_store_list)
+
     return p
 
 

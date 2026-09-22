@@ -51,7 +51,15 @@
           }
         },
         "network": {"type": "array", "items": {"type": "string"}},
-        "secrets": {"type": "array", "items": {"type": "string"}}
+        "secrets": {"type": "array", "items": {"type": "string"}},
+        "host_tools": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "dependencies": {
+      "type": "object",
+      "properties": {
+        "paxlet": {"type": "array", "items": {"type": "string"}},
+        "host": {"type": "array", "items": {"type": "string"}}
       }
     },
     "provenance": {"type": "object"},

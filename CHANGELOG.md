@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-09-22
+
+### Docs
+- Update README.md
+
+### Test
+- Update tests/test_p0_security.py
+
+### Other
+- Update integrations/taskand/adapt.py
+- Update paxlet/cli.py
+- Update paxlet/manifest.py
+- Update paxlet/receipt.py
+- Update paxlet/resolver.py
+- Update paxlet/runtime.py
+- Update paxlet/store.py
+- Update schemas/paxlet.schema.json
+- Update schemas/receipt.schema.json
+
 ## [0.1.2] - 2026-09-22
 
 ### Docs

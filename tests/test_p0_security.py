@@ -256,6 +256,153 @@ class P0SecurityTests(unittest.TestCase):
                 for info in zf.infolist():
                     self.assertEqual(info.date_time, (2026, 1, 1, 0, 0, 0))
 
+    def test_host_tool_declaration_enforcement(self):
+        """P0 #7: Host executables in command runtime must be explicitly declared."""
+        with tempfile.TemporaryDirectory() as td:
+            pkg = Path(td)
+            script = pkg / "bin.js"
+            script.write_text("console.log('{}');\n")
+
+            manifest_undeclared = {
+                "paxlet": "0.1",
+                "identity": {"urn": "urn:paxlet:test:host-tools", "name": "host-tools", "version": "1.0.0"},
+                "actions": {
+                    "run": {
+                        "runtime": {"type": "command", "argv": ["node", "bin.js"]},
+                    }
+                },
+            }
+            (pkg / "paxlet.json").write_text(json.dumps(manifest_undeclared, indent=2))
+
+            # Fails validation because 'node' is not declared
+            val = validate_manifest(pkg, manifest_undeclared)
+            self.assertFalse(val.ok)
+            self.assertTrue(any("undeclared host executable 'node'" in e for e in val.errors))
+
+            # Declaring in permissions.host_tools passes
+            manifest_declared = dict(manifest_undeclared)
+            manifest_declared["permissions"] = {"host_tools": ["node"]}
+            (pkg / "paxlet.json").write_text(json.dumps(manifest_declared, indent=2))
+            val2 = validate_manifest(pkg, manifest_declared)
+            self.assertTrue(val2.ok, f"Expected valid, got: {val2.errors}")
+
+    def test_resolver_digest_verification(self):
+        """P1: Resolver must detect and reject digest mismatch."""
+        from paxlet.resolver import resolve_to_path
+        from paxlet.errors import ResolutionError
+
+        with tempfile.TemporaryDirectory() as td:
+            reg_dir = Path(td)
+            pkg = reg_dir / "pkg"
+            pkg.mkdir()
+            (pkg / "paxlet.json").write_text(json.dumps({
+                "paxlet": "0.1",
+                "identity": {"urn": "urn:paxlet:test:digest-verify", "name": "digest-verify", "version": "1.0.0"},
+                "resources": ["hello.txt"],
+            }))
+            (pkg / "hello.txt").write_text("Hello!\n")
+            actual_digest = package_digest(pkg)
+
+            # Registry with wrong digest
+            reg_file = reg_dir / "registry.json"
+            reg_file.write_text(json.dumps({
+                "registry": "paxlet/0.1",
+                "entries": {
+                    "urn:paxlet:test:digest-verify": [
+                        {
+                            "version": "1.0.0",
+                            "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+                            "uri": f"file:{pkg}",
+                        }
+                    ]
+                }
+            }))
+
+            with self.assertRaises(ResolutionError) as cm:
+                resolve_to_path("urn:paxlet:test:digest-verify", registry_path=reg_file, verify_digest=True)
+            self.assertIn("package digest mismatch", str(cm.exception))
+
+            # Registry with correct digest succeeds
+            reg_file.write_text(json.dumps({
+                "registry": "paxlet/0.1",
+                "entries": {
+                    "urn:paxlet:test:digest-verify": [
+                        {
+                            "version": "1.0.0",
+                            "digest": actual_digest,
+                            "uri": f"file:{pkg}",
+                        }
+                    ]
+                }
+            }))
+            resolved_path = resolve_to_path("urn:paxlet:test:digest-verify", registry_path=reg_file, verify_digest=True)
+            self.assertEqual(resolved_path.resolve(), pkg.resolve())
+
+    def test_node_identity_urn(self):
+        """P1: Node identity must use a URN format instead of raw ephemeral hostname."""
+        from paxlet.receipt import new_receipt, resolve_node_id
+
+        # Derives urn:paxlet:node:...
+        node_id = resolve_node_id()
+        self.assertTrue(node_id.startswith("urn:paxlet:node:") or node_id.startswith("node:"))
+
+        # Custom environment override
+        os.environ["PAXLET_NODE_ID"] = "urn:paxlet:node:custom-worker-42"
+        try:
+            self.assertEqual(resolve_node_id(), "urn:paxlet:node:custom-worker-42")
+            receipt = new_receipt(
+                manifest={"identity": {"urn": "urn:paxlet:test:node", "version": "1.0.0"}},
+                package_digest="sha256:abc",
+                action="test",
+                payload={},
+                started="2026-01-01T00:00:00Z",
+                finished="2026-01-01T00:00:01Z",
+                exit_code=0,
+                output={},
+                secret_names=[],
+            )
+            self.assertEqual(receipt["node"], "urn:paxlet:node:custom-worker-42")
+        finally:
+            del os.environ["PAXLET_NODE_ID"]
+
+    def test_content_addressed_store(self):
+        """P1: Content-addressed store puts, gets, and verifies packages."""
+        from paxlet.store import put_package, get_package, has_package, list_packages
+
+        with tempfile.TemporaryDirectory() as td:
+            os.environ["PAXLET_STORE_DIR"] = str(Path(td) / "store")
+            try:
+                pkg = Path(td) / "sample"
+                pkg.mkdir()
+                (pkg / "paxlet.json").write_text(json.dumps({
+                    "paxlet": "0.1",
+                    "identity": {"urn": "urn:paxlet:test:cas", "name": "cas-test", "version": "1.0.0"},
+                    "resources": ["file.txt"],
+                }))
+                (pkg / "file.txt").write_text("CAS Content\n")
+
+                digest, archive, unpacked = put_package(pkg)
+                self.assertTrue(has_package(digest))
+                self.assertTrue(archive.exists())
+                self.assertTrue(unpacked.exists())
+
+                # Get by digest
+                retrieved = get_package(digest)
+                self.assertIsNotNone(retrieved)
+                self.assertEqual(retrieved.resolve(), unpacked.resolve())
+
+                # Get by URN
+                by_urn = get_package("urn:paxlet:test:cas")
+                self.assertIsNotNone(by_urn)
+
+                # List packages
+                records = list_packages()
+                self.assertEqual(len(records), 1)
+                self.assertEqual(records[0]["urn"], "urn:paxlet:test:cas")
+                self.assertEqual(records[0]["digest"], digest)
+            finally:
+                del os.environ["PAXLET_STORE_DIR"]
+
 
 if __name__ == "__main__":
     unittest.main()

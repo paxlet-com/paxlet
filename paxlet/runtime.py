@@ -78,6 +78,17 @@ def run_action(
             clean_first = first[2:] if first.startswith("./") else first
             first_path = safe_path(package_dir, clean_first)
             argv[0] = str(first_path)
+        else:
+            declared_tools = set(
+                manifest.get("permissions", {}).get("host_tools", [])
+                + manifest.get("dependencies", {}).get("host", [])
+                + runtime.get("host_dependencies", [])
+                + runtime.get("tools", [])
+            )
+            if first not in declared_tools:
+                raise RuntimeError(
+                    f"host executable {first!r} is not declared in permissions.host_tools or dependencies.host"
+                )
         if len(argv) > 1 and not argv[1].startswith("/"):
             if (package_dir / argv[1]).is_file():
                 argv[1] = str(safe_path(package_dir, argv[1]))

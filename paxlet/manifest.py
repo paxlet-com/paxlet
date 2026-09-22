@@ -161,16 +161,31 @@ def validate_manifest(package_dir: Path, data: dict[str, Any], check_files: bool
             argv = runtime.get("argv")
             if not isinstance(argv, list) or not argv or not all(isinstance(v, str) and v.strip() for v in argv):
                 errors.append(f"{label}.runtime.argv must be a non-empty string array")
-            elif check_files:
-                for arg in argv:
-                    clean_arg = arg[2:] if arg.startswith("./") else arg
-                    if arg.startswith("./") or (not arg.startswith("/") and (package_dir / clean_arg).is_file()):
-                        try:
-                            arg_path = safe_path(package_dir, clean_arg)
-                            if not arg_path.is_file():
-                                errors.append(f"{label}.runtime.argv references missing file: {arg}")
-                        except ManifestError as exc:
-                            errors.append(str(exc))
+            else:
+                first = argv[0]
+                is_local = first.startswith("./") or (not first.startswith("/") and (package_dir / first).is_file())
+                if not is_local:
+                    declared_tools = set(
+                        data.get("permissions", {}).get("host_tools", [])
+                        + data.get("dependencies", {}).get("host", [])
+                        + runtime.get("host_dependencies", [])
+                        + runtime.get("tools", [])
+                    )
+                    if first not in declared_tools:
+                        errors.append(
+                            f"{label}.runtime.argv[0] references undeclared host executable {first!r}; "
+                            f"declare it in permissions.host_tools or dependencies.host"
+                        )
+                if check_files:
+                    for arg in argv:
+                        clean_arg = arg[2:] if arg.startswith("./") else arg
+                        if arg.startswith("./") or (not arg.startswith("/") and (package_dir / clean_arg).is_file()):
+                            try:
+                                arg_path = safe_path(package_dir, clean_arg)
+                                if not arg_path.is_file():
+                                    errors.append(f"{label}.runtime.argv references missing file: {arg}")
+                            except ManifestError as exc:
+                                errors.append(str(exc))
         _validate_schema_fragment(action.get("input"), f"{label}.input", errors)
         _validate_schema_fragment(action.get("output"), f"{label}.output", errors)
 
@@ -186,6 +201,15 @@ def validate_manifest(package_dir: Path, data: dict[str, Any], check_files: bool
     if not isinstance(requires, list) or not all(isinstance(v, str) and v.startswith("urn:paxlet:") for v in requires):
         errors.append("requires must be an array of Paxlet URNs")
 
+    dependencies = data.get("dependencies", {})
+    if dependencies is not None and not isinstance(dependencies, dict):
+        errors.append("dependencies must be an object")
+    elif isinstance(dependencies, dict):
+        for dep_key in ("host", "paxlet"):
+            vals = dependencies.get(dep_key, [])
+            if not isinstance(vals, list) or not all(isinstance(v, str) for v in vals):
+                errors.append(f"dependencies.{dep_key} must be an array of strings")
+
     permissions = data.get("permissions", {})
     if not isinstance(permissions, dict):
         errors.append("permissions must be an object")
@@ -198,7 +222,7 @@ def validate_manifest(package_dir: Path, data: dict[str, Any], check_files: bool
                 vals = fs.get(mode, [])
                 if not isinstance(vals, list) or not all(isinstance(v, str) for v in vals):
                     errors.append(f"permissions.filesystem.{mode} must be an array of strings")
-        for key in ("network", "secrets"):
+        for key in ("network", "secrets", "host_tools"):
             vals = permissions.get(key, [])
             if not isinstance(vals, list) or not all(isinstance(v, str) for v in vals):
                 errors.append(f"permissions.{key} must be an array of strings")
@@ -270,8 +294,10 @@ def collect_package_files(package_dir: Path, data: dict[str, Any]) -> list[Path]
     return sorted(files, key=lambda p: p.relative_to(root).as_posix())
 
 
-def package_digest(package_dir: Path, data: dict[str, Any]) -> str:
+def package_digest(package_dir: Path, data: dict[str, Any] | None = None) -> str:
     root = package_dir.resolve()
+    if data is None:
+        _, data = load_manifest(root)
     digest = hashlib.sha256()
     for path in collect_package_files(root, data):
         relative = path.relative_to(root).as_posix().encode("utf-8")

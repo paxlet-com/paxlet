@@ -25,6 +25,8 @@
     "exit_code": {"type": "integer"},
     "granted_secret_names": {"type": "array", "items": {"type": "string"}},
     "artifact_refs": {"type": "array", "items": {"type": "string"}},
+    "parent_receipt": {"type": "string"},
+    "dependencies": {"type": "array"},
     "output": {}
   }
 }

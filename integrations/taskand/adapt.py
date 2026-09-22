@@ -101,7 +101,14 @@ def adapt_proc_yaml(
 
     credentials = raw_data.get("credentials", [])
     if isinstance(credentials, str):
-        credentials = [credentials]
+        cleaned = credentials.strip().strip("[]")
+        credentials = [c.strip().strip("'").strip('"') for c in cleaned.split(",") if c.strip()]
+
+    host_tools = []
+    if runtime["type"] == "command" and runtime.get("argv"):
+        first = runtime["argv"][0]
+        if not first.startswith("./") and not (proc_dir / first).is_file():
+            host_tools.append(first)
 
     manifest: dict[str, Any] = {
         "paxlet": "0.1",
@@ -124,6 +131,7 @@ def adapt_proc_yaml(
             "filesystem": {"read": ["."], "write": ["."]},
             "network": ["*"] if organism in {"admin", "alert", "browser", "chat", "web", "cluster", "mcp"} else [],
             "secrets": [str(c) for c in credentials] if credentials else [],
+            "host_tools": host_tools,
         },
         "provenance": {
             "source": "taskand",
