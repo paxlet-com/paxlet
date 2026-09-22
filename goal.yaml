@@ -71,7 +71,7 @@ strategies:
   python:
     test: python -m unittest discover -s tests -v && python conformance/run.py && make verify-examples
     build: python -m build
-    publish: twine upload dist/paxlet-{version}*
+    publish: twine upload --skip-existing dist/paxlet-{version}*
     publish_enabled: true
     dependencies:
       file: pyproject.toml
