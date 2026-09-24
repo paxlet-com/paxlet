@@ -9,17 +9,20 @@ from . import __version__
 from .errors import PaxletError
 from .manifest import load_manifest, package_digest, validate_manifest
 from .packing import pack as pack_paxlet
-from .resolver import resolve, resolve_to_path
+from .resolver import resolve, resolve_package, uri_to_path
 from .runtime import run_action
 
 
+def _is_reference(value: str) -> bool:
+    return value.startswith(("urn:", "paxlet:")) or "://" in value
+
+
 def _target(value: str, registry: str | None) -> Path:
-    if value.startswith("urn:paxlet:"):
-        from .store import get_package
-        stored = get_package(value)
-        if stored and stored.is_dir():
-            return stored
-        return resolve_to_path(value, registry)
+    if value.startswith("file:"):
+        return uri_to_path(value)
+    if _is_reference(value):
+        # The store index must not silently override an explicit registry selection.
+        return resolve_package(value, registry).path
     return Path(value)
 
 
@@ -114,15 +117,28 @@ def command_inspect(args) -> int:
 
 
 def command_run(args) -> int:
-    path = _target(args.target, args.registry)
+    action, digest = args.action, args.digest
+    if _is_reference(args.target) and not args.target.startswith("file:"):
+        selected = resolve_package(args.target, args.registry, version=args.package_version,
+                                   action=action, digest=digest)
+        path, action, digest = selected.path, selected.action, selected.digest
+    else:
+        path = _target(args.target, args.registry)
+        if args.package_version:
+            _, manifest = load_manifest(path)
+            if manifest.get("identity", {}).get("version") != args.package_version:
+                raise PaxletError("package version does not match request")
+    if not action:
+        raise PaxletError("an explicit action argument or /actions/name URI is required")
     try:
         payload = json.loads(args.input)
     except json.JSONDecodeError as exc:
         raise PaxletError(f"--input must be valid JSON: {exc}") from exc
     output, receipt, receipt_path = run_action(
         path,
-        args.action,
+        action,
         payload,
+        expected_digest=digest,
         allow_secrets=args.allow_secret,
         write_receipts=not args.no_receipt,
     )
@@ -136,7 +152,14 @@ def command_run(args) -> int:
 
 def command_resolve(args) -> int:
     locations = resolve(args.urn, args.registry, version=getattr(args, "urn_version", None))
-    _json({"urn": args.urn, "locations": locations})
+    output = {"reference": args.urn, "locations": locations}
+    if args.urn.startswith("urn:paxlet:"):
+        output["urn"] = args.urn
+    from .references import parse_reference
+    if args.local or parse_reference(args.urn).action is not None or args.digest:
+        selected = resolve_package(args.urn, args.registry, version=args.urn_version, digest=args.digest)
+        output.update(urn=selected.package, plan=selected.plan(), path=str(selected.path))
+    _json(output)
     return 0
 
 
@@ -206,9 +229,11 @@ def parser() -> argparse.ArgumentParser:
     inspect.add_argument("--registry")
     inspect.set_defaults(func=command_inspect)
 
-    run = sub.add_parser("run", help="execute one action using JSON stdin/stdout protocol")
+    run = sub.add_parser("run", aliases=["invoke"], help="execute one action using JSON stdin/stdout protocol")
     run.add_argument("target")
-    run.add_argument("action")
+    run.add_argument("action", nargs="?")
+    run.add_argument("--version", dest="package_version", help="select an exact package version")
+    run.add_argument("--digest", help="require the resolved plan package digest")
     run.add_argument("--input", default="{}")
     run.add_argument("--registry")
     run.add_argument("--allow-secret", action="append", default=[])
@@ -216,10 +241,12 @@ def parser() -> argparse.ArgumentParser:
     run.add_argument("--show-receipt", action="store_true")
     run.set_defaults(func=command_run)
 
-    resolve_cmd = sub.add_parser("resolve", help="resolve a stable Paxlet URN to locations")
+    resolve_cmd = sub.add_parser("resolve", help="resolve a package reference or action URI")
     resolve_cmd.add_argument("urn")
     resolve_cmd.add_argument("--registry")
     resolve_cmd.add_argument("--version", dest="urn_version", help="filter by version")
+    resolve_cmd.add_argument("--local", action="store_true", help="verify local contents and emit a pinned selection")
+    resolve_cmd.add_argument("--digest", help="require an exact package digest")
     resolve_cmd.set_defaults(func=command_resolve)
 
     pack_cmd = sub.add_parser("pack", help="create a portable .paxlet.zip archive")

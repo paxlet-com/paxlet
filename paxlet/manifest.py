@@ -6,7 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .errors import ManifestError
+from .errors import ManifestError, ResolutionError
+from .references import validate_binding
 
 MANIFEST_NAME = "paxlet.json"
 CORE_VERSION = "0.1"
@@ -117,8 +118,16 @@ def validate_manifest(package_dir: Path, data: dict[str, Any], check_files: bool
                 errors.append(f"identity.{field} must be a non-empty string")
 
     bindings = data.get("bindings", [])
-    if not isinstance(bindings, list) or not all(isinstance(v, str) and ":" in v for v in bindings):
-        errors.append("bindings must be an array of URI strings")
+    if not isinstance(bindings, list):
+        errors.append("bindings must be an array of package URI strings")
+    else:
+        for binding in bindings:
+            try:
+                validate_binding(binding)
+            except ResolutionError as exc:
+                errors.append(f"invalid package binding: {exc}")
+        if len({v for v in bindings if isinstance(v, str)}) != len(bindings):
+            errors.append("bindings must be unique URI strings")
 
     actions = data.get("actions", {})
     resources = data.get("resources", [])

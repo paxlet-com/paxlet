@@ -1,0 +1,96 @@
+{
+  "schema": "new-project.intent/v3",
+  "ticket": "ticket-002",
+  "summary": "Deterministic Paxlet action resolution and Taskand integration",
+  "workstream": "application",
+  "classification": {
+    "kind": "FEATURE",
+    "priority": "P1",
+    "origin": "requested"
+  },
+  "allowedPaths": [
+    "project/ticket-002/**",
+    "TODO.md",
+    "project/TICKETS.md",
+    "docs/**",
+    "integrations/taskand/**",
+    "paxlet/**",
+    "tests/**"
+  ],
+  "forbiddenPaths": [
+    "project/ticket-*/user-*.md"
+  ],
+  "stacks": [],
+  "dependsOn": [],
+  "conflictsWith": [],
+  "integrationTicket": null,
+  "delivery": {
+    "acceptedBaseSha": "039d6143ac0af1646ea81f12d9ca09f696e1cbe7",
+    "targetBranch": "main",
+    "outcome": "Deterministic local Paxlet action addressing with tested Taskand integration guidance",
+    "nonGoals": [
+      "Remote distribution and execution",
+      "Changes to Taskand or nl-dsl-sh repositories",
+      "Release or deployment"
+    ],
+    "complexity": "L",
+    "estimatedMinutes": 90,
+    "budgets": {
+      "maxImplementationFiles": 15,
+      "maxAffectedComponents": 3,
+      "maxPublicInterfaceChanges": 3,
+      "maxRuntimeDependencies": 0
+    },
+    "architecture": {
+      "status": "accepted",
+      "decision": "Registry-authorized aliases; strict action references; digest-pinned local execution; network policy remains in Taskand",
+      "components": [
+        {
+          "name": "core",
+          "paths": [
+            "paxlet/**",
+            "tests/**"
+          ]
+        },
+        {
+          "name": "integration",
+          "paths": [
+            "integrations/taskand/**"
+          ]
+        },
+        {
+          "name": "documentation",
+          "paths": [
+            "docs/**"
+          ]
+        }
+      ],
+      "responsibilityChanges": false,
+      "interfaceChanges": [
+        "Optional registry aliases and strict action references with resolve_package",
+        "CLI invoke, version/digest pins and verified resolution",
+        "Taskand adapter exports copies using --output-dir"
+      ],
+      "dataChanges": [],
+      "ui": {
+        "impact": "none",
+        "states": [],
+        "evidence": []
+      },
+      "rollback": "Revert the ticket material commit; existing URN and path calls remain supported"
+    },
+    "runtimeDependencies": [],
+    "validation": [
+      {
+        "criterion": "AC-04",
+        "commands": [
+          "python3 -m unittest discover -s tests -v",
+          "python3 conformance/run.py",
+          "make verify-examples",
+          "./project/governance-check.sh"
+        ],
+        "evidence": "Record command results in ticket and external checkpoint"
+      }
+    ]
+  }
+}
