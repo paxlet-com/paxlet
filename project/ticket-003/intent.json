@@ -1,0 +1,103 @@
+{
+  "schema": "new-project.intent/v3",
+  "ticket": "ticket-003",
+  "summary": "Adopt published Wellmanifest 0.20.52 for Paxlet CI",
+  "workstream": "governance",
+  "classification": {
+    "kind": "SERVICE",
+    "priority": "P1",
+    "origin": "requested"
+  },
+  "allowedPaths": [
+    "project/ticket-003/**",
+    "TODO.md",
+    "project/TICKETS.md",
+    ".github/workflows/new-project-governance.yml",
+    ".governance/manifest.base.json",
+    ".governance/manifest.json",
+    ".governance/manifest.lock.json",
+    "pyproject.toml"
+  ],
+  "forbiddenPaths": [
+    "project/ticket-*/user-*.md"
+  ],
+  "stacks": [],
+  "dependsOn": [],
+  "conflictsWith": [],
+  "integrationTicket": null,
+  "delivery": {
+    "acceptedBaseSha": "86c232f9252aff3fa47730402b571d4b03bd2ba8",
+    "targetBranch": "main",
+    "outcome": "Adopt corrected, published new-project 0.20.52 in Paxlet so generated CI installs Wellman from canonical v<version> and resolves exact PR ranges; then revalidate product PR #2 at the updated main.",
+    "nonGoals": [
+      "Change Paxlet application behavior or ticket-002 branch",
+      "Change any pyproject.toml setting beyond the atomically bound tool.wellmanifest standard and revision",
+      "Weaken managed integrity or protected review",
+      "Claim automatic fleet-wide update beyond this adoption"
+    ],
+    "complexity": "S",
+    "estimatedMinutes": 60,
+    "budgets": {
+      "maxImplementationFiles": 5,
+      "maxAffectedComponents": 1,
+      "maxPublicInterfaceChanges": 0,
+      "maxRuntimeDependencies": 0
+    },
+    "architecture": {
+      "status": "accepted",
+      "decision": "Invoke Goal adoption at immutable published revision 980f6e5f73c923f2959c266b84de9ffc544671de. Preserve target-owned manifest settings and update only the closed tool.wellmanifest metadata binding in pyproject.toml, which the atomic adoption checker explicitly exempts from general integration ownership.",
+      "components": [
+        {
+          "name": "adopted-governance",
+          "paths": [
+            ".github/workflows/new-project-governance.yml",
+            ".governance/manifest.base.json",
+            ".governance/manifest.json",
+            ".governance/manifest.lock.json",
+            "pyproject.toml"
+          ]
+        }
+      ],
+      "responsibilityChanges": false,
+      "interfaceChanges": [],
+      "dataChanges": [],
+      "ui": {
+        "impact": "none",
+        "states": [],
+        "evidence": []
+      },
+      "rollback": "Use a reviewed corrective adoption to a later published revision; preserve immutable lock history."
+    },
+    "runtimeDependencies": [],
+    "validation": [
+      {
+        "criterion": "AC-01",
+        "commands": [
+          "goal governance adopt --source-revision 980f6e5f73c923f2959c266b84de9ffc544671de --target-root . --upgrade --check"
+        ],
+        "evidence": "Exact immutable 0.20.52 source revision and four planned managed changes only."
+      },
+      {
+        "criterion": "AC-02",
+        "commands": [
+          "./project/governance-check.sh --base <base> --head <head>",
+          "wellman check --root . --actor ci --base <base> --head <head>",
+          "product detached PR workflow probe"
+        ],
+        "evidence": "Managed integrity and actual detached Paxlet CI gate pass with Wellman installed from the published canonical v0.20.52 standard tag."
+      },
+      {
+        "criterion": "AC-03",
+        "commands": [
+          "goal -a --delivery-mode pull-request --no-publish push --ticket ticket-003"
+        ],
+        "evidence": "Exact-head required checks, independent Validator review and protected merge."
+      }
+    ],
+    "standardAdoption": {
+      "sourceRepository": "wellmanifest/new-project",
+      "fromRevision": "42dce766825f35b2a97cf16c9bf72e80a4a0c2d3",
+      "toRevision": "980f6e5f73c923f2959c266b84de9ffc544671de"
+    }
+  }
+}

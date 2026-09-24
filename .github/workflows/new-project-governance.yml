@@ -106,7 +106,7 @@ jobs:
         run: |
           set -euo pipefail
           standard_version="$(python3 -c 'import json; print(json.load(open(".governance/manifest.json", encoding="utf-8"))["standard"]["version"])')"
-          runtime_ref="wellman-v${standard_version}"
+          runtime_ref="v${standard_version}"
           python3 -m pip install --disable-pip-version-check "git+https://github.com/wellmanifest/new-project.git@${runtime_ref}#subdirectory=packages/wellman"
           wellman --version
       - name: Run the managed governance gate
@@ -118,16 +118,19 @@ jobs:
           set -euo pipefail
           # CI has no local clone hook; checks bound to a developer clone are
           # skipped for the ci actor, exactly as for governance_check.py below.
-          wellman check --root . --actor ci --json
+          range_arguments=()
+          if [[ -n "${BASE_SHA:-}" || -n "${HEAD_SHA:-}" ]]; then
+            if [[ -z "${BASE_SHA:-}" || -z "${HEAD_SHA:-}" ]]; then
+              echo "Both BASE_SHA and HEAD_SHA are required for PR validation." >&2
+              exit 1
+            fi
+            range_arguments=(--base "$BASE_SHA" --head "$HEAD_SHA")
+          fi
+          wellman check --root . --actor ci --json "${range_arguments[@]}"
           # The adopter's standard-adoption.json mode decides: "enforce" fails on
           # missing packs, "audit" reports them without failing the gate.
           python3 .governance/standard_pack_check.py --root . --format json
           arguments=(--root . --manifest .governance/manifest.json
             --lock .governance/manifest.lock.json
             --stack-profiles .governance/stack-profiles.json --actor ci)
-          # A pull request is validated as a range; a scheduled or dispatched run
-          # has no range, so it validates the repository as it stands.
-          if [[ -n "${BASE_SHA:-}" && -n "${HEAD_SHA:-}" ]]; then
-            arguments+=(--base "$BASE_SHA" --head "$HEAD_SHA")
-          fi
-          python3 .governance/governance_check.py "${arguments[@]}"
+          python3 .governance/governance_check.py "${arguments[@]}" "${range_arguments[@]}"
