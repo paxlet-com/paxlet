@@ -92,6 +92,46 @@ class TaskandAdapterTests(unittest.TestCase):
                 export_proc_yaml(source / "proc.yaml", source / "nested")
 
 
+    def test_real_taskand_shell_export_store_and_execution_copy(self):
+        import subprocess
+        import sys
+        taskand = os.environ.get("TASKAND_ROOT")
+        if not taskand:
+            self.skipTest("set TASKAND_ROOT to exercise the real Taskand shell consumer")
+        script = r'''
+import json, sys, tempfile
+from pathlib import Path
+import paxlet
+assert Path(paxlet.__file__).resolve().is_relative_to(Path(sys.argv[1]))
+from app.shell_workflow import export_package, run_package
+from paxlet.store import put_package, list_packages, materialize_package
+from paxlet.manifest import package_digest
+from unittest.mock import patch
+with tempfile.TemporaryDirectory() as temp:
+    root = Path(temp)
+    plan = {"schema_version":"0.1", "name":"store-roundtrip", "steps":[
+        {"id":"hello", "kind":"generate", "language":"python", "code":"print('Witaj Taskand!')\n"}]}
+    exported = export_package(plan, root / 'export', urn='urn:paxlet:taskand:store-test', permissions={})
+    with patch.dict('os.environ', {'PAXLET_STORE_DIR':str(root / 'store')}):
+        digest, archive, installed = put_package(root / 'export', expected_digest=exported['digest'])
+        record = list_packages()[0]
+        assert record['digest'] == digest and 'run' in record['actions']
+        workspace = materialize_package(digest, root / 'execution')
+        result = run_package(workspace, expected_digest=digest)
+        assert result['output']['stdout'] == 'Witaj Taskand!\n', result
+        assert result['receipt']['package_digest'] == digest
+        assert package_digest(installed) == digest
+        assert not (installed / '.paxlet').exists()
+        print(json.dumps({'digest':digest, 'output':result['output']}))
+'''
+        env = dict(os.environ)
+        env["PYTHONDONTWRITEBYTECODE"] = "1"
+        env["PYTHONPATH"] = os.pathsep.join([str(ROOT), taskand, env.get("PYTHONPATH", "")])
+        result = subprocess.run([sys.executable, "-c", script, str(ROOT)], env=env,
+                                capture_output=True, text=True, timeout=30, cwd=ROOT)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["output"]["stdout"], "Witaj Taskand!\n")
+
     def test_adapt_all_taskand_generated(self):
         taskand_generated = Path(os.environ.get("TASKAND_ROOT", ROOT.parent / "taskand")) / "generated"
         if not taskand_generated.exists():

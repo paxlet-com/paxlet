@@ -25,9 +25,9 @@
   "conflictsWith": [],
   "integrationTicket": null,
   "delivery": {
-    "acceptedBaseSha": "039d6143ac0af1646ea81f12d9ca09f696e1cbe7",
+    "acceptedBaseSha": "1ae249e4dd0ea4439a01fcbd50c51a577838d17f",
     "targetBranch": "main",
-    "outcome": "Deterministic local Paxlet action addressing and a unified development-stage architecture for Taskand/Paxlet/nl-dsl-sh",
+    "outcome": "Verified action addressing and atomic content-addressed Paxlet storage with derived catalog records for Taskand; publish the tested branch and PR, obtain exact-head independent Validator review and protected-controller merge as authorized by the user.",
     "nonGoals": [
       "Remote distribution and execution",
       "Changes to Taskand or nl-dsl-sh repositories",
@@ -43,7 +43,7 @@
     },
     "architecture": {
       "status": "accepted",
-      "decision": "Registry-authorized aliases and digest-pinned local execution; document one Paxlet package contract and Taskand-owned catalog/synchronization without mandatory legacy compatibility",
+      "decision": "Registry-authorized aliases, digest-pinned local execution, atomic verified content objects and manifest-derived catalog projections; Taskand owns mutable node catalog and synchronization",
       "components": [
         {
           "name": "core",
@@ -67,11 +67,17 @@
       ],
       "responsibilityChanges": false,
       "interfaceChanges": [
-        "Optional registry aliases and strict action references with resolve_package",
+        "Strict action references, verified resolution and content-store APIs with manifest-derived records",
         "CLI invoke, version/digest pins and verified resolution",
         "Taskand adapter exports copies using --output-dir"
       ],
-      "dataChanges": [],
+      "dataChanges": [
+        {
+          "kind": "component-local-state",
+          "component": "core",
+          "description": "Private core package cache uses objects-v1 for new installations. Existing legacy cache/index files remain untouched; there is no data migration, shared catalog schema change or transfer of ownership. Archive transport remains paxlet-archive/0.1."
+        }
+      ],
       "ui": {
         "impact": "none",
         "states": [],
@@ -84,10 +90,11 @@
       {
         "criterion": "AC-04",
         "commands": [
-          "python3 -m unittest discover -s tests -v",
+          "PYTHONPATH=/path/to/nl-dsl-sh/src TASKAND_ROOT=/path/to/taskand python3 -m unittest discover -s tests -v",
+          "docker run with tests/docker/Dockerfile image, network disabled, read-only mount and tmpfs",
           "python3 conformance/run.py",
           "make verify-examples",
-          "./project/governance-check.sh"
+          "./project/governance-check.sh --base origin/main --head HEAD"
         ],
         "evidence": "Record command results in ticket and external checkpoint"
       }

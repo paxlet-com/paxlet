@@ -112,3 +112,88 @@ OS sandbox. The local reference runtime assumes its package directory is not
 concurrently modified during invocation. Production nodes need read-only content
 storage and their own execution grants. Package identity, location and execution
 receipts can then evolve independently.
+
+## Verified local content store
+
+The store uses `$PAXLET_STORE_DIR/objects-v1/<sha256-hex>/`, with a `package/`
+directory and a `package.paxlet.zip` archive inside each object. Without an
+override, the root is `$PAXLET_HOME/store` (default `~/.paxlet/store`).
+A private sibling staging directory is verified before one directory rename
+publishes the object. Payload files are read-only; every lookup rechecks both
+representations. Concurrent imports of the same digest converge on one object.
+An interrupted import may leave `.staging-*` data, which inventory ignores.
+No automatic garbage collection removes this recovery data.
+
+```sh
+paxlet store put ./examples/hello --json
+# On a receiving node, supply the expected PACKAGE digest from its accepted plan:
+paxlet store put ./hello.paxlet.zip --digest 'sha256:<64-lowercase-hex-digits>' --json
+paxlet store list --json
+paxlet store get urn:paxlet:example:hello --version 1.0.0 --output-dir ./run-001
+paxlet invoke ./run-001 hello --digest 'sha256:<64-lowercase-hex-digits>' \
+  --input '{"name":"Ada"}'
+```
+
+Substitute the actual digest returned by installation. Without `--output-dir`,
+`store get` returns the verified storage path for inspection/transport. The
+runtime rejects execution under the configured store root. An explicit new
+execution copy keeps results, caches and receipts outside immutable content.
+`--output-dir` never overwrites an existing directory. Python callers use
+`put_package(source, expected_digest=...)`, `get_package(selector, version=...)`,
+`materialize_package(selector, destination, version=...)`, and `list_packages()`.
+
+There is no mutable Paxlet identity index. Inventory derives identity, version,
+bindings, action definitions, dependencies and requested permissions from each
+verified manifest. `path` and `archive` are local observations, not portable
+catalog fields. Bindings remain claims; requested permissions are not grants.
+Two objects claiming the same URN/version can coexist for review, but lookup by
+that URN/version fails as ambiguous. Select a digest explicitly. The authorized
+Taskand catalog must reject conflicting active assignments; storing bytes does
+not activate an action or authorize an alias.
+
+Legacy `archives/`, `packages/` and `index/` directories are preserved but are not
+consulted by the new layout. Reinstall an original package/archive with a reviewed
+digest to migrate it. There is no silent conversion of old index paths or old
+Taskand hashes. Local filesystem owners can still change files/permissions;
+read-only bits and digest checks are integrity controls, not a process sandbox.
+Native Windows behavior and network filesystem crash semantics are not yet
+validated by the Linux/PowerShell container tests.
+
+### Inventory, archive and digest contract
+
+The canonical inventory is the manifest plus local implementation/resources
+selected by `collect_package_files`. Symlinks are forbidden. Unreferenced local
+runtime/cache/build state is excluded, including `.paxlet/`, `.git/`,
+`__pycache__/`, `node_modules/`, `build/`, `dist/`, `.pyc`, `.pyo` and generated
+`.paxlet.zip` files. Installation copies this inventory, not the whole source
+directory. Archive payloads must contain exactly that inventory.
+
+`PAXLET-METADATA.json` is a reserved archive envelope. Its format, identity and
+package digest must match the payload; it is removed before computing the package
+digest and never becomes a package member. Duplicate entries/JSON fields, path
+traversal, absolute paths, symlinks, special files, case aliases, file/directory
+collisions, non-NFC paths, Windows device names and encrypted entries are rejected.
+Archives contain files only; explicit directory entries are unsupported. Limits
+are 10,000 payload paths (files and implied directories), 64 MiB per file,
+256 MiB expanded data (including the envelope), 300 MiB compressed input and
+1 MiB envelope. A path has at most 32 segments and 1,024 UTF-8 bytes. Manifest
+JSON rejects duplicate keys and non-finite numbers, which are not portable JSON. Validation and installation
+do not execute package code or fetch dependencies.
+
+The package digest remains Core 0.1 SHA-256 over this concatenation for every
+relative path sorted by Unicode scalar value (equivalently UTF-8 byte order):
+
+```text
+uint32_be(len(UTF8(path))) || UTF8(path) || uint64_be(len(content)) || content
+```
+
+Paths use `/`; lengths count bytes. Content includes the exact manifest bytes,
+not reserialized JSON. Timestamps, executable bits and ZIP metadata are excluded.
+Execution copies normalize modes to 0644/0755; stored files to 0444/0555.
+The ZIP checksum and package digest are distinct contracts.
+
+The executable golden vector in `tests/test_resolution.py` contains `a.txt`,
+`żółć.txt`, U+E000 and U+1F680 paths, binary bytes and a fixed manifest. Its digest
+is `sha256:fad4aab122965054922d2c281824b6d7c0c987ddec3099a6f370e13dd2be76a5`.
+Independent Python and Node implementations must match it. In JavaScript use
+UTF-8 `Buffer.compare` sorting; default UTF-16 string sorting fails this vector.

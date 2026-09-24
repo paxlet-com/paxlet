@@ -172,8 +172,13 @@ def command_pack(args) -> int:
 
 def command_store_put(args) -> int:
     from .store import put_package
-    target = _target(args.target, args.registry)
-    digest, archive, unpacked = put_package(target)
+    expected = args.digest
+    if _is_reference(args.target) and not args.target.startswith("file:"):
+        selected = resolve_package(args.target, args.registry, digest=expected)
+        target, expected = selected.path, selected.digest
+    else:
+        target = _target(args.target, args.registry)
+    digest, archive, unpacked = put_package(target, expected_digest=expected)
     if args.json:
         _json({"digest": digest, "archive": str(archive), "path": str(unpacked)})
     else:
@@ -184,8 +189,9 @@ def command_store_put(args) -> int:
 
 
 def command_store_get(args) -> int:
-    from .store import get_package
-    p = get_package(args.target)
+    from .store import get_package, materialize_package
+    p = (materialize_package(args.target, args.output_dir, version=args.package_version)
+         if args.output_dir else get_package(args.target, version=args.package_version))
     if not p:
         raise PaxletError(f"package not found in store: {args.target}")
     print(str(p))
@@ -261,11 +267,14 @@ def parser() -> argparse.ArgumentParser:
     store_put = store_sub.add_parser("put", help="put package into content-addressed store")
     store_put.add_argument("target")
     store_put.add_argument("--registry")
+    store_put.add_argument("--digest", help="require this package content digest")
     store_put.add_argument("--json", action="store_true")
     store_put.set_defaults(func=command_store_put)
 
     store_get = store_sub.add_parser("get", help="get unpacked package path from store by digest or URN")
     store_get.add_argument("target")
+    store_get.add_argument("--version", dest="package_version", help="exact package version")
+    store_get.add_argument("--output-dir", help="create a new writable execution copy outside the store")
     store_get.set_defaults(func=command_store_get)
 
     store_list = store_sub.add_parser("list", help="list all stored packages")

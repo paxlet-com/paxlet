@@ -55,6 +55,9 @@ def run_action(
 ) -> tuple[Any, dict[str, Any], Path | None]:
     manifest_file, manifest = load_manifest(path)
     package_dir = manifest_file.parent
+    from .store import is_store_path
+    if is_store_path(package_dir):
+        raise RuntimeError("stored content cannot be executed in place; use store get --output-dir to create an execution copy")
     result = validate_manifest(package_dir, manifest)
     if not result.ok:
         raise RuntimeError("invalid Paxlet: " + "; ".join(result.errors))

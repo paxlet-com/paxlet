@@ -63,3 +63,11 @@ Taskand node catalog, and migrates internal callers to a shared pinned invocatio
 model. Keeping old proc URI spelling or a permanent conversion layer is not a
 requirement. The [architecture plan](../../docs/taskand-lan.md) records the accepted
 breaking-change scope and the package/store-first implementation sequence.
+
+
+Paxlet now exposes the [verified storage contract](../../docs/addressing.md#verified-local-content-store).
+A Taskand importer can call `put_package(..., expected_digest=...)`, derive catalog
+records with `list_packages()`, authorize the identity/alias assignment in its own
+transaction, and create an execution workspace with `materialize_package(...)`.
+Only the explicit run step executes code. Package permissions remain requests and
+must not be converted to local grants by catalog import.
