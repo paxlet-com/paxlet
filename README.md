@@ -113,6 +113,53 @@ python -m unittest discover -s tests -v
 python conformance/run.py
 ```
 
+## Governance and standard updates
+
+The adopted wellmanifest/new-project contract is pinned in
+`.governance/manifest.lock.json`. Its managed files are verified by the local
+commit hook; the hook does not fetch or install a new standard. Explicit updates
+use Goal's published-release verifier in the adoption ticket's linked worktree:
+
+```bash
+goal governance adopt --standard-repository /path/to/wellmanifest/new-project \
+  --source-revision 42dce766825f35b2a97cf16c9bf72e80a4a0c2d3 \
+  --target-root /path/to/adoption-worktree --check
+# After admission and a bounded write lease, apply the reviewed plan with --upgrade.
+```
+
+This adoption uses published standard 0.20.50. Its CI workflow obtains the matching
+governance runtime from the standard's `wellman-v0.20.50` release tag, rather than
+assuming the same version exists on PyPI. Run CI validation with the `ci` actor;
+local hook installation is a developer-clone check. The separately installed
+fleet CLI and this versioned gate runtime share the `wellman` command name and
+must not be confused. Use an isolated environment for the CI runtime.
+
+The local adoption inventory records only evidenced **S2 local conformance**:
+the normative schema, deterministic checker, immutable revision and managed file
+digests. It does not claim required CI checks (S3) or branch protection (S4).
+`standard_pack_check.py --strict` intentionally continues to report the unmet
+baseline requirements. A passing local `wellman check` alone is insufficient.
+
+The host's hourly `wellmanifest-sync` timer currently runs in read-only **plan**
+mode. An inventory entry allows it to identify this pin and report drift; it does
+not automatically allocate a ticket, update a repository, push or merge. Legacy
+`updates.trigger=pre-commit` metadata does not enable automatic updates in the
+current hook. Treat `unmanaged`, failed scans and missing release evidence as
+findings, not successful freshness checks.
+
+Audit on 2026-09-24 found no GitHub ruleset or `main` branch protection in Paxlet,
+Taskand or the ecosystem tests repository. Their baseline pack records were empty,
+and tests PR #7 failed to provision `wellman==0.20.43` before validation. The
+Taskand standard pin was 0.20.16, versus 0.20.43 in Paxlet/tests. This change fixes
+Paxlet's checked-in runtime provisioning and inventory declaration; the other
+repositories and hosted settings retain their separately owned work.
+
+Full proactive enforcement still needs a controlled update executor consuming the
+inventory, independent review/required checks, protected branch settings and actual
+delivery receipts. Keep those gaps visible until their deployed behavior is tested.
+Local validation, a successful timer exit and an `enforce` label in a manifest do
+not establish that end-to-end result.
+
 ## Important security note
 
 The reference runtime is intentionally educational. It validates package paths and exposes secrets only after explicit user grant, but it **does not enforce filesystem/network permissions with an OS sandbox**. Production nodes should use containers, VMs or OS policy for enforcement. See `docs/security.md`.
