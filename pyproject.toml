@@ -32,8 +32,8 @@ max_commits = 500
 badge_color_thresholds = { low = 1.0, medium = 5.0, high = 10.0, critical = 50.0 }
 
 [tool.wellmanifest]
-standard = "0.20.43"
-revision = "56223848ea416d59e53123cdcab6e9155a11fe2b"
+standard = "0.20.50"
+revision = "42dce766825f35b2a97cf16c9bf72e80a4a0c2d3"
 gate = "project/governance-check.sh"
 
 [tool.pytest.ini_options]

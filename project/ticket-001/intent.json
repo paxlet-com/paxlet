@@ -9,46 +9,33 @@
     "origin": "health"
   },
   "allowedPaths": [
-    ".aider.conf.yml",
-    ".cursor/rules/**",
-    ".gitattributes",
-    ".githooks/**",
-    ".github/copilot-instructions.md",
-    ".github/workflows/new-project-branch-hygiene.yml",
+    "project/ticket-001/**",
     ".github/workflows/new-project-governance.yml",
-    ".gitignore",
     ".governance/**",
-    ".subactor/**",
-    "AGENTS.md",
-    "CLAUDE.md",
-    "GEMINI.md",
-    "README.md",
-    "TODO.md",
-    "CHANGELOG.md",
-    "CONTRIBUTING.md",
-    "project.sh",
-    "project.bat",
-    "project/**",
-    "scripts/install-agent-hosts.sh",
-    "scripts/runtime.sh",
     "wellmanifest_governance.py",
-    "worktree-guard.yaml",
+    "README.md",
     "pyproject.toml"
   ],
-  "forbiddenPaths": [],
-  "stacks": ["python"],
+  "forbiddenPaths": [
+    "project/ticket-*/user-*.md"
+  ],
+  "stacks": [],
   "dependsOn": [],
   "conflictsWith": [],
   "integrationTicket": null,
   "delivery": {
-    "acceptedBaseSha": "0c199cace18ad4e4c7c834497cf7118e5fd55437",
+    "acceptedBaseSha": "039d6143ac0af1646ea81f12d9ca09f696e1cbe7",
     "targetBranch": "main",
-    "outcome": "Adoption of wellmanifest standards with worktrees and git lifecycle",
+    "outcome": "Verified adoption of published 0.20.50, working CI runtime provisioning and honest local inventory. Publish the reviewed ticket branch and PR, then merge through the declared protected controller after exact-head independent approval, as explicitly authorized by the user on 2026-09-24.",
     "nonGoals": [
-      "Modifying core paxlet runtime actions or packaging algorithms"
+      "Product runtime changes",
+      "Editing protected GitHub rulesets or Validator configuration",
+      "Deployment or bypassing protected review and merge controls",
+      "Claiming protected conformance from local checks",
+      "Writing to concurrent upstream standard tickets"
     ],
     "complexity": "L",
-    "estimatedMinutes": 30,
+    "estimatedMinutes": 90,
     "budgets": {
       "maxImplementationFiles": 15,
       "maxAffectedComponents": 1,
@@ -57,20 +44,16 @@
     },
     "architecture": {
       "status": "accepted",
-      "decision": "Adopt wellmanifest/new-project governance baseline",
+      "decision": "Invoke the existing immutable Goal adopter at published revision 42dce766825f35b2a97cf16c9bf72e80a4a0c2d3; preserve target-owned manifest settings, existing product branches and local-only versus protected conformance distinctions. Register actual new-project pin and artifacts so the read-only timer can identify the adopter. Update only tool.wellmanifest version/revision in pyproject.toml from the new lock, as required by the managed atomic packaging adoption binding; runtime dependencies and build configuration stay unchanged.",
       "components": [
         {
           "name": "governance",
           "paths": [
-            ".gitattributes",
-            ".gitignore",
+            ".github/workflows/new-project-governance.yml",
             ".governance/**",
-            "CHANGELOG.md",
+            "wellmanifest_governance.py",
             "README.md",
-            "project.bat",
-            "project.sh",
-            "pyproject.toml",
-            "CONTRIBUTING.md"
+            "pyproject.toml"
           ]
         }
       ],
@@ -82,20 +65,25 @@
         "states": [],
         "evidence": []
       },
-      "rollback": "Revert to accepted base sha 0c199cace18ad4e4c7c834497cf7118e5fd55437."
+      "rollback": "Preserve main and other worktrees; revert this local ticket commit if needed. No existing content, protected policy or runtime service changes."
     },
     "runtimeDependencies": [],
     "validation": [
       {
-        "criterion": "AC-01",
-        "commands": ["wellman check --root ."],
-        "evidence": "Wellman check passes cleanly."
+        "criterion": "AC-07",
+        "commands": [
+          "goal governance adopt --check with the exact published source revision",
+          "wellman check --root . --json",
+          "python3 .governance/standard_pack_check.py --root . --strict --format json",
+          "./project/governance-check.sh --base origin/main --head HEAD"
+        ],
+        "evidence": "Exact revision/digest checks, matched runtime CI-actor validation, strict pack gaps retained and timer identification probe."
       }
     ],
     "standardAdoption": {
       "sourceRepository": "wellmanifest/new-project",
-      "fromRevision": null,
-      "toRevision": "56223848ea416d59e53123cdcab6e9155a11fe2b"
+      "fromRevision": "56223848ea416d59e53123cdcab6e9155a11fe2b",
+      "toRevision": "42dce766825f35b2a97cf16c9bf72e80a4a0c2d3"
     }
   }
 }
