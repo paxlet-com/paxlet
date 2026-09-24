@@ -1,8 +1,11 @@
 # Paxlet, Taskand and LAN synchronization
 
 Assessment date: 2026-09-24. This slice implements Paxlet addressing and isolated
-Taskand export. It does not implement LAN discovery, replication or a Taskand
-upgrade. Observations below distinguish implemented behavior from recommendations.
+Taskand export. The user subsequently confirmed that the entire ecosystem is in
+development and permits deeper, breaking architectural changes. The target below
+supersedes the earlier compatibility-first migration recommendation. Observed
+implementation and the proposed target remain distinct; LAN replication and the
+Taskand architecture replacement are not implemented by this documentation change.
 
 ## Observed ecosystem
 
@@ -38,62 +41,119 @@ or grant access to the source process. A `proc://` alias denotes the copied pack
 caller grants before any remote invocation. Calling the local Paxlet runtime
 is not equivalent to passing through that gateway.
 
-## Recommended simplifications in Taskand
+## Accepted direction for the development architecture
 
-These are proposed next slices, not deployed behavior.
+Optimize for one comprehensible system. Existing proc URI syntax, proc.yaml
+manifests, per-organism registry files and duplicate digest formats may be replaced.
+A temporary importer may read old data, but maintaining two runtime representations
+is not a design requirement. This permission changes the migration constraints;
+it does not imply that a particular replacement is already implemented.
 
-1. **Use one catalog contract with separate identities.** Keep process URI,
-   canonical package URN/version/digest, node ID and endpoint locations distinct.
-   Feed CLI, gateway, MCP and mesh views from that catalog projection. Preserve
-   the existing `proc://` identifiers during migration; do not mechanically
-   replace them with `paxlet://` strings. Approve alias mappings at the registry
-   boundary, never from package self-declarations alone.
-2. **Start with one seed peer and pull reconciliation.** Allow a configured LAN
-   endpoint and bounded polling. Add optional mDNS/DNS-SD announcements only to
-   discover candidate endpoints. Discovery must not distribute execution grants,
-   bearer tokens or implicitly trusted package aliases. Validate peer endpoints,
-   redirects, response schemas, timeouts and size limits before fetching content.
-   Separate read-only catalog access from authenticated package transfer/calls.
-3. **Replicate immutable content by digest.** Retain catalog → missing content →
-   verify → candidate, but fetch only absent digests. Stage files in a new
-   directory, reject traversal/symlinks/oversized payloads, verify the complete
-   closure and atomically publish under a content-addressed path. Serialize the
-   final install and catalog update. Interrupted downloads must never expose a
-   partially installed package; an identical retry must converge.
-4. **Synchronize catalog revisions, not whole runtime directories.** Start with
-   bounded snapshots carrying an origin, revision and digest, plus conditional
-   reads. Add deltas only when snapshot size justifies them. Reject a different
-   digest for the same immutable identity/version and preserve explicit removal
-   markers to prevent deleted entries returning from an old peer. Keep peer
-   health/TTL observations separate from package metadata and activation policy.
-   A single writer per catalog namespace is simpler than initial multi-writer
-   conflict resolution. Do not replicate `.env`, grants, secrets, locks or local
-   execution queues together with package bytes.
-5. **Keep invocation and replication independently retryable.** An immutable
-   download can be retried after observation. A process call may have side
-   effects: persist a caller-scoped invocation ID bound to action, package digest
-   and input digest, record receipts at the execution node and reconcile unknown
-   outcomes before retrying. Do not promise exactly-once effects without a
-   transactional boundary in the called service.
+| Owner | Target responsibility | Duplication to remove |
+|---|---|---|
+| Paxlet | Package manifest, action contracts, canonical package digest and verified immutable content store | Separate Taskand package format/hash and repeated package validation |
+| Taskand | Node identity, one local transactional catalog, execution policy, scheduling, peer discovery and replication | Per-organism registry writers and separate CLI/MCP/mesh catalogs |
+| nl-dsl-sh | Construct/compile a plan whose callable steps use the shared invocation contract | Parallel package-resolution rules or executable URIs inferred by an LLM |
+| CLI, MCP and web | Present or submit the same catalog queries and authorized invocation requests | Independent routing, alias interpretation and execution policies |
 
-For a small LAN, this means a node service, a durable content store and a catalog
-with one controlled writer per namespace. Existing process modules can remain;
-there is no need to make every package operate an independent network registry.
+The canonical package remains a named, versioned content object. An action is a
+member of its manifest. `paxlet://…/actions/…` is a human-facing selector; the
+persisted execution request contains `package`, `action`, `version`, `digest` and
+`input`. It contains no machine-specific installation path. Every executable plan
+must be bound to exact package bytes before submission. Availability and grants
+are evaluated by the destination node, not inferred from discoverability.
 
-## Migration order and acceptance checks
+```mermaid
+flowchart LR
+    NL[nl-dsl-sh planner] -->|pinned invocation| T[Taskand node]
+    UI[CLI / MCP / web] -->|same API| T
+    T -->|verify / install / invoke| P[Paxlet package contract and content store]
+    T <-->|catalog revisions and missing digests| Peer[Peer Taskand node]
+```
+
+## Concrete simplifications
+
+1. **One package representation.** Use `paxlet.json` for executable actions,
+   input/output contracts and package dependencies. Taskand-specific metadata
+   extends that manifest where necessary; it must not repeat fields under a second
+   semantic definition. Convert existing generated processes in isolated staging,
+   update their consumers in the same cutover and stop writing `proc.yaml` in the
+   new flow. Historical receipts retain their original schema and digest meaning.
+   New transfers and receipts use the Paxlet digest; never reinterpret an old
+   Taskand hash as if it were computed by Paxlet.
+2. **One immutable package store.** Separate package bytes from work directories,
+   execution receipts, grants and credentials. The current local store is a
+   prototype: `put_package` copies whole directories and archive extraction lacks
+   a shared transactional validation boundary. Before using it for replication,
+   define one canonical file inventory, reject unsafe archive entries and verify
+   the package in staging. Publish to a digest-addressed directory atomically,
+   reject conflicting immutable identity/version assignments and recheck existing
+   content rather than trusting its filename. Cross-runtime implementations must
+   pass shared digest vectors, including non-ASCII paths and changed file order.
+3. **One local catalog per node.** Prefer a single SQLite-backed catalog owned by
+   the Taskand node, with package/action records derived from verified manifests.
+   Organisms become labels or namespace fields. CLI, gateway, MCP and mesh read
+   projections of that same catalog. Package aliases and endpoint observations
+   remain separate from immutable content. Keep local approval/grant state
+   distinct from replicated catalog declarations. A discovered alias is a claim;
+   the authorized namespace owner decides whether it enters the local index.
+   SQLite's transaction provides the catalog commit boundary
+   ([atomic commit](https://www.sqlite.org/atomiccommit.html)); it does not make
+   a filesystem rename and a database update one transaction. Install verified
+   immutable bytes first, then commit their catalog reference. Recovery can retain
+   an unreferenced blob, but must never expose a runnable record with missing or
+   unverified content.
+4. **A small synchronization protocol.** Begin with configured seed peers and
+   bounded polling. Exchange a versioned catalog snapshot carrying origin,
+   revision and digest; fetch only missing package digests. Retain removal markers
+   and the last accepted origin revision so old peers cannot resurrect withdrawn
+   entries. Use one writer per namespace initially; reject competing claims
+   instead of merging executable definitions by last-write-wins. Replicate logical
+   catalog records and immutable objects, never the live database file, secrets,
+   grants, locks or execution queues. Add delta transport and automatic discovery
+   only when measured needs justify them.
+5. **Node identity independent of addresses.** Give each node a persisted identity;
+   hostname/IP/port and last-seen time are mutable observations. Treat discovery as
+   finding candidate endpoints. Define peer authentication and namespace authority
+   independently, and validate endpoints, redirects, schemas, response sizes and
+   timeouts at the transport boundary. Packages do not need their own servers.
+6. **One explicit invocation boundary.** Plans, catalog queries and package
+   synchronization do not execute code. Taskand binds a caller-scoped invocation
+   ID to action, package digest and input digest, then applies local grants and
+   records the result. Unknown outcomes are reconciled before retrying side
+   effects. Do not propagate grants merely because a peer advertised a process.
+   When URI spelling changes, migrate grants by reviewed action identity; a string
+   rewrite must not accidentally broaden execution permissions.
+
+For the development cutover, rebuild generated indexes from the new package set
+and update internal callers and tests together. Retaining old endpoint spelling
+is optional. Prefer removing obsolete adapters after the replacement passes its
+contract tests over keeping an indefinite compatibility branch in each component.
+Keep existing data and execution evidence available until the new representation
+has been verified; regeneration is not an implicit deletion operation.
+
+## Ordered implementation slices
 
 | Slice | Bounded change | Required evidence |
 |---|---|---|
-| Paxlet (this ticket) | Explicit aliases/actions, digest pins, copy-based export | URN/URI equivalence, malformed selectors, fallback, conflicts, relocation and non-execution tests |
-| Taskand catalog bridge | Map approved process URI to Paxlet package plus `run`; retain original Taskand hash as typed provenance | Old proc callers keep their behavior; export does not change the registered source; unauthorized calls still fail |
-| Taskand replication | Stage and verify immutable content, then atomically install and register candidates | Two isolated nodes; interrupted transfer, concurrent import, tampering, malicious paths, idempotent retry and same-version conflict |
-| Taskand LAN sync | Seed configuration, catalog revisions, peer liveness; discovery optional | Three nodes; offline/rejoin, stale snapshot, removed entry, untrusted peer and convergent inventories without automatic activation |
-| nl-dsl-sh planner bridge | Consume verified selections and persist package/action/version/digest/input | Alias remapping cannot silently change a saved plan; digest and action checks precede runtime selection |
-| Authorized remote invoke | Keep Taskand grants and reconcile invocation receipts | Timeout after acceptance does not cause a blind duplicate execution |
+| Paxlet groundwork (implemented) | Explicit aliases/actions, digest pins, copy-based export | URN/URI equivalence, malformed selectors, fallback, conflicts, relocation and non-execution tests |
+| Shared package/storage contract (next) | Harden Paxlet immutable store; define common digest vectors and derive Taskand catalog/action records from Paxlet manifests | Same files yield the same digest across runtimes; tampering, unsafe archives and interrupted install never become runnable content |
+| Taskand catalog cutover | One transactional node catalog and one invocation model; update gateway/MCP/CLI consumers; replace duplicate registry/hash code | All surfaces see the same actions and versions; planning cannot execute; grants retain their intended action scope |
+| Taskand replication | Stage, verify, atomically install and register remote candidates using the common package format | Two isolated nodes; interrupted transfer, concurrent import, malicious paths, idempotent retry and same-version conflict |
+| Taskand LAN sync | Seed configuration, catalog revisions and peer liveness; discovery optional | Three nodes; offline/rejoin, stale snapshot, withdrawn entry, untrusted peer and convergent inventories without automatic activation |
+| nl-dsl-sh integration | Emit and consume the common pinned invocation structure; update development fixtures directly | Alias remapping cannot change saved execution intent; native runtime alternatives preserve the action contract |
+| Remote execution reconciliation | Single Taskand authorization/result boundary across transports | Timeout after acceptance does not cause blind duplicate execution |
 
-The two-node and three-node checks remain required before describing the combined
-system as proven for LAN synchronization. This Paxlet slice supplies the package
-selection boundary; it does not establish Taskand's network guarantees.
+Source changes in each repository need their own bounded ticket and owner. The
+existing Paxlet ticket is retained; PLF-003 carries this revised target and replaces
+its earlier promise of permanent proc URI compatibility. Taskand's current
+`app/shell_workflow.py`, `packages/taskand-shell/`, native shell URIs and gateway/MCP
+integration are existing consumers to migrate, not features to reinvent.
+
+The two-node and three-node checks remain required before claiming LAN convergence.
+Breaking-change permission allows a simpler implementation; it does not substitute
+for those integration results. The exact catalog schema, wire format and runtime
+sandbox must be settled in the owning implementation slice before they are exposed.
 
 ## Validation and reproduction
 

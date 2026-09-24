@@ -29,6 +29,20 @@ worktree ticket-002--action-resolution and its revision-1/fence-1 lease.
   tampering, relocation and read-only resolution; run stack and governance gates.
 - [x] AC-05: Inspect current Taskand and nl-dsl-sh code and document integration
   gaps and a bounded LAN simplification/migration plan with evidence.
+- [x] AC-06: Revise the ecosystem architecture for development-stage breaking
+  changes; remove mandatory legacy compatibility and specify a single package,
+  digest, invocation and catalog model with ordered implementation slices.
+
+## Development-stage clarification (2026-09-24)
+
+SESSION_EXECUTION_AUTHORIZATION: the user clarified that Taskand, Paxlet and related
+projects are development versions and deeper architectural changes are allowed.
+Compatibility with existing proc URIs, manifest layouts, hashing and registry
+storage is not an acceptance requirement for the forthcoming architecture.
+Continue this ticket's documentation scope and update PLF-003; each future source
+slice still belongs to its owning repository/ticket. Existing artifacts, data and
+concurrent work are preserved; the clarification does not authorize silent data
+loss or treating local checks as protected merge evidence.
 
 ## Non-goals
 
@@ -63,7 +77,12 @@ review and delivery; local checks do not grant merge authority.
 
 ## Next action
 
-Finish exact-commit scope validation and retain ticket ownership through any
-protected publication. Taskand LAN bridge, staged replication and catalog sync
+Exact-commit validation of 19e91a0 passed. Validate and commit the development-stage
+architecture revision, then retain the same ticket for any protected publication.
+Taskand package/catalog replacement, staged replication and catalog sync
 are separate follow-up slices described in docs/taskand-lan.md; no network-wide
 synchronization or deployment is claimed by this ticket.
+
+Architecture clarification validation: the full 46-test host suite passes with
+one PowerShell skip already covered by the prior Docker run. The governed diff
+check passes; no executable source changed in this continuation.

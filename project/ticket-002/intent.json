@@ -27,7 +27,7 @@
   "delivery": {
     "acceptedBaseSha": "039d6143ac0af1646ea81f12d9ca09f696e1cbe7",
     "targetBranch": "main",
-    "outcome": "Deterministic local Paxlet action addressing with tested Taskand integration guidance",
+    "outcome": "Deterministic local Paxlet action addressing and a unified development-stage architecture for Taskand/Paxlet/nl-dsl-sh",
     "nonGoals": [
       "Remote distribution and execution",
       "Changes to Taskand or nl-dsl-sh repositories",
@@ -43,7 +43,7 @@
     },
     "architecture": {
       "status": "accepted",
-      "decision": "Registry-authorized aliases; strict action references; digest-pinned local execution; network policy remains in Taskand",
+      "decision": "Registry-authorized aliases and digest-pinned local execution; document one Paxlet package contract and Taskand-owned catalog/synchronization without mandatory legacy compatibility",
       "components": [
         {
           "name": "core",
@@ -77,7 +77,7 @@
         "states": [],
         "evidence": []
       },
-      "rollback": "Revert the ticket material commit; existing URN and path calls remain supported"
+      "rollback": "Revert ticket material changes if needed; development compatibility is not a constraint on future architecture slices"
     },
     "runtimeDependencies": [],
     "validation": [

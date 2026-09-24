@@ -54,3 +54,12 @@ Do not replace a Taskand registry hash with a Paxlet digest: the algorithms and
 file sets differ. Keep both provenance values during migration. See
 [the ecosystem assessment](../../docs/taskand-lan.md) for observed boundaries,
 LAN synchronization recommendations and remaining validation.
+
+## Development architecture direction
+
+The current exporter is a transition tool. The development-stage target replaces
+Taskand's duplicate package format and hashing with the Paxlet contract, uses one
+Taskand node catalog, and migrates internal callers to a shared pinned invocation
+model. Keeping old proc URI spelling or a permanent conversion layer is not a
+requirement. The [architecture plan](../../docs/taskand-lan.md) records the accepted
+breaking-change scope and the package/store-first implementation sequence.
