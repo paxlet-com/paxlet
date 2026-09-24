@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .errors import ManifestError
+from .errors import ManifestError, ResolutionError
+from .references import NAME, URN, exact_version, validate_binding
 
 MANIFEST_NAME = "paxlet.json"
 CORE_VERSION = "0.1"
@@ -45,13 +47,27 @@ def manifest_path(path: str | Path) -> Path:
     return candidate.resolve()
 
 
+def _manifest_fields(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ManifestError(f"duplicate manifest field: {key}")
+        result[key] = value
+    return result
+
+
+def _invalid_json_constant(value: str):
+    raise ManifestError(f"non-finite JSON number is not permitted: {value}")
+
+
 def load_manifest(path: str | Path) -> tuple[Path, dict[str, Any]]:
     target = manifest_path(path)
     if not target.exists():
         raise ManifestError(f"manifest not found: {target}")
     try:
-        data = json.loads(target.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
+        data = json.loads(target.read_text(encoding="utf-8"), object_pairs_hook=_manifest_fields,
+                          parse_constant=_invalid_json_constant)
+    except (json.JSONDecodeError, UnicodeError, OSError) as exc:
         raise ManifestError(f"invalid JSON in {target}: {exc}") from exc
     if not isinstance(data, dict):
         raise ManifestError("manifest root must be an object")
@@ -85,7 +101,7 @@ def _validate_schema_fragment(fragment: Any, label: str, errors: list[str]) -> N
     if not isinstance(fragment, dict):
         errors.append(f"{label} must be an object")
         return
-    if "type" in fragment and fragment["type"] not in {"object", "array", "string", "number", "integer", "boolean", "null"}:
+    if "type" in fragment and fragment["type"] not in ("object", "array", "string", "number", "integer", "boolean", "null"):
         errors.append(f"{label}.type is not a supported JSON type")
     if fragment.get("type") == "object" and "properties" in fragment and not isinstance(fragment["properties"], dict):
         errors.append(f"{label}.properties must be an object")
@@ -110,15 +126,27 @@ def validate_manifest(package_dir: Path, data: dict[str, Any], check_files: bool
         errors.append("identity must be an object")
     else:
         urn = identity.get("urn")
-        if not isinstance(urn, str) or not urn.startswith("urn:paxlet:"):
-            errors.append("identity.urn must start with 'urn:paxlet:'")
+        if not isinstance(urn, str) or not URN.fullmatch(urn):
+            errors.append("identity.urn must be a canonical Paxlet URN")
         for field in ("name", "version"):
             if not isinstance(identity.get(field), str) or not identity[field].strip():
                 errors.append(f"identity.{field} must be a non-empty string")
+        try:
+            exact_version(identity.get("version"))
+        except ResolutionError as exc:
+            errors.append(str(exc))
 
     bindings = data.get("bindings", [])
-    if not isinstance(bindings, list) or not all(isinstance(v, str) and ":" in v for v in bindings):
-        errors.append("bindings must be an array of URI strings")
+    if not isinstance(bindings, list):
+        errors.append("bindings must be an array of package URI strings")
+    else:
+        for binding in bindings:
+            try:
+                validate_binding(binding)
+            except ResolutionError as exc:
+                errors.append(f"invalid package binding: {exc}")
+        if len({v for v in bindings if isinstance(v, str)}) != len(bindings):
+            errors.append("bindings must be unique URI strings")
 
     actions = data.get("actions", {})
     resources = data.get("resources", [])
@@ -133,8 +161,8 @@ def validate_manifest(package_dir: Path, data: dict[str, Any], check_files: bool
 
     for name, action in actions.items():
         label = f"actions.{name}"
-        if not isinstance(name, str) or not name.strip():
-            errors.append("action names must be non-empty strings")
+        if not isinstance(name, str) or not re.fullmatch(NAME, name):
+            errors.append("action names must be canonical address names")
             continue
         if not isinstance(action, dict):
             errors.append(f"{label} must be an object")
@@ -144,7 +172,7 @@ def validate_manifest(package_dir: Path, data: dict[str, Any], check_files: bool
             errors.append(f"{label}.runtime must be an object")
             continue
         runtime_type = runtime.get("type")
-        if runtime_type not in {"python", "command"}:
+        if runtime_type not in ("python", "command"):
             errors.append(f"{label}.runtime.type must be 'python' or 'command'")
         if runtime_type == "python":
             entry = runtime.get("entry")
@@ -165,12 +193,15 @@ def validate_manifest(package_dir: Path, data: dict[str, Any], check_files: bool
                 first = argv[0]
                 is_local = first.startswith("./") or (not first.startswith("/") and (package_dir / first).is_file())
                 if not is_local:
-                    declared_tools = set(
-                        data.get("permissions", {}).get("host_tools", [])
-                        + data.get("dependencies", {}).get("host", [])
-                        + runtime.get("host_dependencies", [])
-                        + runtime.get("tools", [])
-                    )
+                    declared_tools = set()
+                    for container, key in [(data.get("permissions", {}), "host_tools"),
+                                           (data.get("dependencies", {}), "host"),
+                                           (runtime, "host_dependencies"), (runtime, "tools")]:
+                        values = container.get(key, []) if isinstance(container, dict) else []
+                        if not isinstance(values, list) or not all(isinstance(v, str) for v in values):
+                            errors.append(f"{label}: {key} must be an array of strings")
+                        else:
+                            declared_tools.update(values)
                     if first not in declared_tools:
                         errors.append(
                             f"{label}.runtime.argv[0] references undeclared host executable {first!r}; "
@@ -231,6 +262,8 @@ def validate_manifest(package_dir: Path, data: dict[str, Any], check_files: bool
     if provenance is not None and not isinstance(provenance, dict):
         errors.append("provenance must be an object")
 
+    if not isinstance(permissions, dict):
+        permissions = {}
     if permissions.get("network"):
         warnings.append("reference runtime declares network permissions but does not enforce a network sandbox")
     if isinstance(permissions.get("filesystem"), dict) and permissions["filesystem"].get("write"):
@@ -242,6 +275,8 @@ def validate_manifest(package_dir: Path, data: dict[str, Any], check_files: bool
 def collect_package_files(package_dir: Path, data: dict[str, Any]) -> list[Path]:
     root = package_dir.resolve()
     files: set[Path] = set()
+    if (root / "PAXLET-METADATA.json").exists():
+        raise ManifestError("PAXLET-METADATA.json is reserved for the archive envelope")
 
     manifest_target = root / MANIFEST_NAME
     if manifest_target.is_file():
@@ -287,7 +322,7 @@ def collect_package_files(package_dir: Path, data: dict[str, Any]) -> list[Path]
             if any(part in IGNORED_DIR_NAMES for part in rel_parts):
                 continue
             if item.is_file():
-                if item.name in IGNORED_FILE_PATTERNS or item.suffix in IGNORED_EXTENSIONS:
+                if item.name in IGNORED_FILE_PATTERNS or any(item.name.endswith(suffix) for suffix in IGNORED_EXTENSIONS):
                     continue
                 files.add(item.resolve())
 

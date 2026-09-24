@@ -1,0 +1,103 @@
+{
+  "schema": "new-project.intent/v3",
+  "ticket": "ticket-002",
+  "summary": "Deterministic Paxlet action resolution and Taskand integration",
+  "workstream": "application",
+  "classification": {
+    "kind": "FEATURE",
+    "priority": "P1",
+    "origin": "requested"
+  },
+  "allowedPaths": [
+    "project/ticket-002/**",
+    "TODO.md",
+    "project/TICKETS.md",
+    "docs/**",
+    "integrations/taskand/**",
+    "paxlet/**",
+    "tests/**"
+  ],
+  "forbiddenPaths": [
+    "project/ticket-*/user-*.md"
+  ],
+  "stacks": [],
+  "dependsOn": [],
+  "conflictsWith": [],
+  "integrationTicket": null,
+  "delivery": {
+    "acceptedBaseSha": "1ae249e4dd0ea4439a01fcbd50c51a577838d17f",
+    "targetBranch": "main",
+    "outcome": "Verified action addressing and atomic content-addressed Paxlet storage with derived catalog records for Taskand; publish the tested branch and PR, obtain exact-head independent Validator review and protected-controller merge as authorized by the user.",
+    "nonGoals": [
+      "Remote distribution and execution",
+      "Changes to Taskand or nl-dsl-sh repositories",
+      "Release or deployment"
+    ],
+    "complexity": "L",
+    "estimatedMinutes": 90,
+    "budgets": {
+      "maxImplementationFiles": 15,
+      "maxAffectedComponents": 3,
+      "maxPublicInterfaceChanges": 3,
+      "maxRuntimeDependencies": 0
+    },
+    "architecture": {
+      "status": "accepted",
+      "decision": "Registry-authorized aliases, digest-pinned local execution, atomic verified content objects and manifest-derived catalog projections; Taskand owns mutable node catalog and synchronization",
+      "components": [
+        {
+          "name": "core",
+          "paths": [
+            "paxlet/**",
+            "tests/**"
+          ]
+        },
+        {
+          "name": "integration",
+          "paths": [
+            "integrations/taskand/**"
+          ]
+        },
+        {
+          "name": "documentation",
+          "paths": [
+            "docs/**"
+          ]
+        }
+      ],
+      "responsibilityChanges": false,
+      "interfaceChanges": [
+        "Strict action references, verified resolution and content-store APIs with manifest-derived records",
+        "CLI invoke, version/digest pins and verified resolution",
+        "Taskand adapter exports copies using --output-dir"
+      ],
+      "dataChanges": [
+        {
+          "kind": "component-local-state",
+          "component": "core",
+          "description": "Private core package cache uses objects-v1 for new installations. Existing legacy cache/index files remain untouched; there is no data migration, shared catalog schema change or transfer of ownership. Archive transport remains paxlet-archive/0.1."
+        }
+      ],
+      "ui": {
+        "impact": "none",
+        "states": [],
+        "evidence": []
+      },
+      "rollback": "Revert ticket material changes if needed; development compatibility is not a constraint on future architecture slices"
+    },
+    "runtimeDependencies": [],
+    "validation": [
+      {
+        "criterion": "AC-04",
+        "commands": [
+          "PYTHONPATH=/path/to/nl-dsl-sh/src TASKAND_ROOT=/path/to/taskand python3 -m unittest discover -s tests -v",
+          "docker run with tests/docker/Dockerfile image, network disabled, read-only mount and tmpfs",
+          "python3 conformance/run.py",
+          "make verify-examples",
+          "./project/governance-check.sh --base origin/main --head HEAD"
+        ],
+        "evidence": "Record command results in ticket and external checkpoint"
+      }
+    ]
+  }
+}

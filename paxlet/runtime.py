@@ -9,6 +9,7 @@ from typing import Any
 
 from .errors import RuntimeError
 from .manifest import load_manifest, package_digest, safe_path, validate_manifest
+from .references import exact_digest
 from .receipt import new_receipt, utc_now, write_receipt
 from .schema import validate_value
 
@@ -50,12 +51,21 @@ def run_action(
     write_receipts: bool = True,
     include_raw_output: bool = False,
     timeout: int | None = None,
+    expected_digest: str | None = None,
 ) -> tuple[Any, dict[str, Any], Path | None]:
     manifest_file, manifest = load_manifest(path)
     package_dir = manifest_file.parent
+    from .store import is_store_path
+    if is_store_path(package_dir):
+        raise RuntimeError("stored content cannot be executed in place; use store get --output-dir to create an execution copy")
     result = validate_manifest(package_dir, manifest)
     if not result.ok:
         raise RuntimeError("invalid Paxlet: " + "; ".join(result.errors))
+
+    exact_digest(expected_digest)
+    execution_digest = package_digest(package_dir, manifest)
+    if expected_digest is not None and execution_digest != expected_digest:
+        raise RuntimeError("package digest changed before execution")
 
     action = manifest.get("actions", {}).get(action_name)
     if not isinstance(action, dict):
@@ -117,7 +127,7 @@ def run_action(
         }
         receipt = new_receipt(
             manifest=manifest,
-            package_digest=package_digest(package_dir, manifest),
+            package_digest=execution_digest,
             action=action_name,
             payload=payload,
             started=started,
@@ -144,7 +154,7 @@ def run_action(
         }
         receipt = new_receipt(
             manifest=manifest,
-            package_digest=package_digest(package_dir, manifest),
+            package_digest=execution_digest,
             action=action_name,
             payload=payload,
             started=started,
@@ -165,7 +175,7 @@ def run_action(
 
     receipt = new_receipt(
         manifest=manifest,
-        package_digest=package_digest(package_dir, manifest),
+        package_digest=execution_digest,
         action=action_name,
         payload=payload,
         started=started,

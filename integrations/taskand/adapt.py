@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shutil
 import sys
 from pathlib import Path
 from typing import Any
@@ -25,20 +26,10 @@ def semver_from_taskand_version(v_str: str) -> str:
 
 def parse_taskand_uri(uri: str) -> dict[str, str]:
     """Extract authority, organism, capability, and version from proc:// URI."""
-    m = re.match(r"^proc://([^/]+)/([^/]+)/([^/]+)/(v\d+(?:\.\d+)*)$", uri.strip())
+    m = re.fullmatch(r"proc://(taskand\.dev)/([a-z0-9][a-z0-9-]*)/([a-z0-9][a-z0-9-]*)/(v(?:0|[1-9][0-9]*))", uri)
     if not m:
-        parts = uri.replace("proc://", "").strip("/").split("/")
-        if len(parts) >= 4:
-            return {"host": parts[0], "organism": parts[1], "capability": parts[2], "version": parts[3]}
-        elif len(parts) == 3:
-            return {"host": parts[0], "organism": parts[1], "capability": parts[2], "version": "v1"}
-        return {"host": "taskand.dev", "organism": "task", "capability": "process", "version": "v1"}
-    return {
-        "host": m.group(1),
-        "organism": m.group(2),
-        "capability": m.group(3),
-        "version": m.group(4),
-    }
+        raise ValueError("expected canonical Taskand proc://taskand.dev/organism/capability/vN URI")
+    return {"host": m[1], "organism": m[2], "capability": m[3], "version": m[4]}
 
 
 def adapt_proc_yaml(
@@ -63,23 +54,17 @@ def adapt_proc_yaml(
                 k, v = line.split(":", 1)
                 raw_data[k.strip()] = v.strip().strip('"').strip("'")
 
-    uri = str(raw_data.get("uri", "")).strip()
-    parsed_uri = parse_taskand_uri(uri) if uri else {}
-
-    organism = str(raw_data.get("organism") or parsed_uri.get("organism") or "task").strip()
-
-    # Prefer clean slug from URI or directory path if raw_data capability contains long text/spaces
-    uri_cap = parsed_uri.get("capability", "").strip()
-    raw_cap = str(raw_data.get("capability") or "").strip()
-    if uri_cap and (not raw_cap or " " in raw_cap or len(raw_cap) > 40):
-        capability = uri_cap
-    elif raw_cap and " " not in raw_cap:
-        capability = raw_cap
-    else:
-        capability = uri_cap or proc_dir.parent.parent.name
-    capability = "".join(ch.lower() if ch.isalnum() else "-" for ch in capability).strip("-")
-    while "--" in capability:
-        capability = capability.replace("--", "-")
+    if not isinstance(raw_data, dict):
+        raise ValueError("proc.yaml must contain a mapping")
+    uri = raw_data.get("uri")
+    if not isinstance(uri, str):
+        raise ValueError("proc.yaml requires a process URI")
+    parsed_uri = parse_taskand_uri(uri)
+    organism = parsed_uri["organism"]
+    if raw_data.get("organism", organism) != organism:
+        raise ValueError("proc.yaml organism does not match process URI")
+    # A descriptive capability field must never rename the URI's identity.
+    capability = parsed_uri["capability"]
     v_tag = parsed_uri.get("version", "v1")
     semver_version = semver_from_taskand_version(v_tag)
 
@@ -151,7 +136,7 @@ def adapt_proc_yaml(
 
     val = validate_manifest(proc_dir, manifest, check_files=proc_dir.exists())
 
-    if write:
+    if write and val.ok:
         target = Path(output_file).resolve() if output_file else proc_dir / "paxlet.json"
         target.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
@@ -171,10 +156,35 @@ def adapt_directory(
     return results
 
 
+def export_proc_yaml(proc_yaml_path: Path | str, destination: Path | str) -> tuple[dict[str, Any], bool, list[str]]:
+    """Adapt a copy, preserving the source Taskand package and its registered hash.
+
+    The destination is new and caller-owned. No registry entry, activation or grant
+    is created. Symlinks are copied as links and rejected by manifest validation.
+    """
+    source, destination = Path(proc_yaml_path).resolve(), Path(destination).resolve()
+    if source.name != "proc.yaml" or not source.is_file():
+        raise ValueError("export source must be a proc.yaml file")
+    if destination == source.parent or source.parent in destination.parents:
+        raise ValueError("export destination must be outside the source package")
+    if destination.exists():
+        raise ValueError("export destination must not exist")
+    shutil.copytree(source.parent, destination, symlinks=True)
+    try:
+        result = adapt_proc_yaml(destination / "proc.yaml", write=True)
+        if not result[1]:
+            shutil.rmtree(destination)
+        return result
+    except Exception:
+        shutil.rmtree(destination)
+        raise
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Generate Paxlet manifests from Taskand proc.yaml files")
     parser.add_argument("path", help="Path to proc.yaml or directory containing proc.yaml files")
     parser.add_argument("--dry-run", action="store_true", help="Validate without writing paxlet.json")
+    parser.add_argument("--output-dir", type=Path, help="export copies to a new directory; preserve Taskand package hashes")
     parser.add_argument("--json", action="store_true", help="Output summary as JSON")
     args = parser.parse_args(argv)
 
@@ -183,8 +193,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Error: path not found: {target}", file=sys.stderr)
         return 1
 
+    if not args.dry_run and args.output_dir is None:
+        parser.error("writing requires --output-dir; in-place conversion changes Taskand package hashes")
+
     if target.is_file() and target.name == "proc.yaml":
-        manifest, ok, errors = adapt_proc_yaml(target, write=not args.dry_run)
+        manifest, ok, errors = (adapt_proc_yaml(target, write=False) if args.dry_run else
+                                export_proc_yaml(target, args.output_dir))
         if args.json:
             print(json.dumps({"file": str(target), "ok": ok, "errors": errors, "manifest": manifest}, indent=2))
         else:
@@ -193,7 +207,16 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if ok else 1
 
     # Directory
-    results = adapt_directory(target, write=not args.dry_run)
+    if args.dry_run:
+        results = adapt_directory(target, write=False)
+    else:
+        if args.output_dir.exists() or args.output_dir.resolve() == target or target in args.output_dir.resolve().parents:
+            parser.error("output directory must be new and outside the source tree")
+        results = []
+        for proc_yaml in sorted(target.rglob("proc.yaml")):
+            destination = args.output_dir / proc_yaml.parent.relative_to(target)
+            manifest, ok, errors = export_proc_yaml(proc_yaml, destination)
+            results.append((proc_yaml, manifest, ok, errors))
     success = sum(1 for _, _, ok, _ in results if ok)
     total = len(results)
 
@@ -217,4 +240,8 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except (ValueError, OSError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        raise SystemExit(1)
