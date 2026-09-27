@@ -1,0 +1,79 @@
+{
+  "paxlet": "0.1",
+  "identity": {
+    "urn": "urn:paxlet:twinerd:backup",
+    "name": "twinerd-backup",
+    "version": "1.0.0"
+  },
+  "bindings": [
+    "paxlet://twinerd/backup"
+  ],
+  "actions": {
+    "snapshot": {
+      "description": "Create an immutable CoW snapshot of a digital twin workspace.",
+      "runtime": {
+        "type": "python",
+        "entry": "adapter.py"
+      },
+      "input": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": {"type": "string"},
+          "target_dir": {"type": "string"}
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": ["status", "name", "snapshot_path", "digest"],
+        "properties": {
+          "status": {"type": "string"},
+          "name": {"type": "string"},
+          "snapshot_path": {"type": "string"},
+          "digest": {"type": "string"},
+          "elapsed_ms": {"type": "number"}
+        }
+      }
+    },
+    "export": {
+      "description": "Export and compress a snapshot archive with verifiable SHA-256 digest.",
+      "runtime": {
+        "type": "python",
+        "entry": "adapter.py"
+      },
+      "input": {
+        "type": "object",
+        "required": ["snapshot_path"],
+        "properties": {
+          "snapshot_path": {"type": "string"},
+          "compression": {"type": "string", "default": "gzip"}
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": ["status", "archive_path", "sha256", "size_bytes"],
+        "properties": {
+          "status": {"type": "string"},
+          "archive_path": {"type": "string"},
+          "sha256": {"type": "string"},
+          "size_bytes": {"type": "integer"}
+        }
+      }
+    }
+  },
+  "resources": [],
+  "requires": [],
+  "permissions": {
+    "filesystem": {
+      "read": ["/tmp", "/var/tmp"],
+      "write": ["/tmp", "/var/tmp"]
+    },
+    "network": [],
+    "secrets": [],
+    "host_tools": ["tar", "gzip"]
+  },
+  "provenance": {
+    "source": "twinerd/twinerd backup engine",
+    "maintainer": "Twinerd Ecosystem Team"
+  }
+}
