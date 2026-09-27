@@ -48,6 +48,17 @@ class CoreTests(unittest.TestCase):
             out = pack(ROOT / "examples/hello", Path(td) / "hello.paxlet.zip")
             self.assertTrue(out.exists())
 
+    def test_twinerd_core_validates_and_inspects(self):
+        pkg = ROOT / "examples/twinerd-core"
+        mf, data = load_manifest(pkg)
+        self.assertTrue(validate_manifest(mf.parent, data).ok)
+        output, receipt, _ = run_action(pkg, "inspect", {}, write_receipts=False)
+        self.assertEqual(output["status"], "ok")
+        self.assertIn("cpu_model", output)
+        self.assertEqual(receipt["identity"]["urn"], "urn:paxlet:twinerd:core")
+        self.assertEqual(receipt["action"], "inspect")
+        self.assertEqual(receipt["exit_code"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

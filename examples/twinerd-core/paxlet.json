@@ -1,0 +1,81 @@
+{
+  "paxlet": "0.1",
+  "identity": {
+    "urn": "urn:paxlet:twinerd:core",
+    "name": "twinerd-core",
+    "version": "1.0.0"
+  },
+  "bindings": [
+    "paxlet://twinerd/core"
+  ],
+  "actions": {
+    "inspect": {
+      "description": "Inspect host hardware capabilities, CPU fingerprint, hardware digest, virtualization CoW engines, and anti-debug integrity.",
+      "runtime": {
+        "type": "python",
+        "entry": "adapter.py"
+      },
+      "input": {
+        "type": "object",
+        "properties": {}
+      },
+      "output": {
+        "type": "object",
+        "required": ["status", "cpu_model", "machine_id", "hardware_digest", "anti_debug_integrity"],
+        "properties": {
+          "status": {"type": "string"},
+          "cpu_model": {"type": "string"},
+          "machine_id": {"type": "string"},
+          "hardware_digest": {"type": "string"},
+          "hardware_acceleration": {"type": "string"},
+          "anti_debug_integrity": {"type": "string"},
+          "snapshot_engines": {"type": "array"},
+          "gateway_engine": {"type": "string"}
+        }
+      }
+    },
+    "benchmark": {
+      "description": "Run zero-copy CoW snapshot benchmark comparing legacy Docker/tar vs native Rust Core.",
+      "runtime": {
+        "type": "python",
+        "entry": "adapter.py"
+      },
+      "input": {
+        "type": "object",
+        "properties": {
+          "size_mb": {"type": "integer"}
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": ["status", "speedup_factor", "speedup_summary", "rust_total_ms"],
+        "properties": {
+          "status": {"type": "string"},
+          "simulated_workspace_mb": {"type": "integer"},
+          "legacy_total_s": {"type": "number"},
+          "rust_total_ms": {"type": "number"},
+          "rust_snapshot_cow_ms": {"type": "number"},
+          "speedup_factor": {"type": "number"},
+          "speedup_summary": {"type": "string"},
+          "ram_footprint": {"type": "string"},
+          "streaming_latency": {"type": "string"}
+        }
+      }
+    }
+  },
+  "resources": [],
+  "requires": [],
+  "permissions": {
+    "filesystem": {
+      "read": ["/etc", "/proc", "/sys"],
+      "write": ["/tmp"]
+    },
+    "network": [],
+    "secrets": [],
+    "host_tools": ["twinerd"]
+  },
+  "provenance": {
+    "source": "twinerd/twinerd core",
+    "maintainer": "Twinerd Engineering Team"
+  }
+}
