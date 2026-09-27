@@ -1,0 +1,87 @@
+{
+  "paxlet": "0.1",
+  "identity": {
+    "urn": "urn:paxlet:twinerd:vm",
+    "name": "twinerd-vm",
+    "version": "1.0.0"
+  },
+  "bindings": [
+    "paxlet://twinerd/vm"
+  ],
+  "actions": {
+    "create": {
+      "description": "Rapid zero-copy digital twin sandbox creation with virtual display and Tokio WebSocket gateway.",
+      "runtime": {
+        "type": "python",
+        "entry": "adapter.py"
+      },
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {"type": "string"},
+          "novnc_port": {"type": "integer"},
+          "rfb_port": {"type": "integer"},
+          "driver": {"type": "string"},
+          "source": {"type": "string"}
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": ["status", "name", "mount_point", "novnc_url", "websocket_url", "rfb_port"],
+        "properties": {
+          "status": {"type": "string"},
+          "name": {"type": "string"},
+          "driver": {"type": "string"},
+          "driver_label": {"type": "string"},
+          "source": {"type": "string"},
+          "mount_point": {"type": "string"},
+          "snapshot_elapsed_us": {"type": "integer"},
+          "total_elapsed_ms": {"type": "number"},
+          "display_num": {"type": "integer"},
+          "rfb_port": {"type": "integer"},
+          "novnc_port": {"type": "integer"},
+          "novnc_url": {"type": "string"},
+          "websocket_url": {"type": "string"}
+        }
+      }
+    },
+    "destroy": {
+      "description": "Tear down digital twin instance and release ephemeral CoW mount point.",
+      "runtime": {
+        "type": "python",
+        "entry": "adapter.py"
+      },
+      "input": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": {"type": "string"}
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": ["status", "name", "freed"],
+        "properties": {
+          "status": {"type": "string"},
+          "name": {"type": "string"},
+          "freed": {"type": "boolean"}
+        }
+      }
+    }
+  },
+  "resources": [],
+  "requires": [],
+  "permissions": {
+    "filesystem": {
+      "read": ["/tmp", "/etc", "/proc", "/sys"],
+      "write": ["/tmp"]
+    },
+    "network": [],
+    "secrets": [],
+    "host_tools": ["twinerd"]
+  },
+  "provenance": {
+    "source": "twinerd/twinerd core",
+    "maintainer": "Twinerd Engineering Team"
+  }
+}
