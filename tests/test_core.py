@@ -59,6 +59,18 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(receipt["action"], "inspect")
         self.assertEqual(receipt["exit_code"], 0)
 
+    def test_twinerd_vm_validates_and_creates(self):
+        pkg = ROOT / "examples/twinerd-vm"
+        mf, data = load_manifest(pkg)
+        self.assertTrue(validate_manifest(mf.parent, data).ok)
+        output, receipt, _ = run_action(pkg, "create", {"name": "test-paxlet-vm"}, write_receipts=False)
+        self.assertEqual(output["status"], "ok")
+        self.assertIn("mount_point", output)
+        self.assertIn("websocket_url", output)
+        self.assertEqual(receipt["identity"]["urn"], "urn:paxlet:twinerd:vm")
+        self.assertEqual(receipt["action"], "create")
+        self.assertEqual(receipt["exit_code"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()
